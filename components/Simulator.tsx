@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Mic,
@@ -21,6 +22,7 @@ import {
 import { useSpeech } from '@/hooks/useSpeech';
 import { getGeminiResponse } from '@/lib/gemini';
 import { logUsage } from '@/lib/supabase';
+import { getConsultantAvatar } from '@/lib/avatar';
 
 type Mode = 'Interview' | 'Consultant' | 'IELTS' | null;
 
@@ -36,7 +38,6 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     jobTitle: 'Marketing Manager',
     industry: 'Technology',
     consultingArea: 'Business Strategy',
-    problemDescription: '',
     difficulty: 'Normal',
     language: 'English',
     ieltsPart: 'Part 1'
@@ -331,19 +332,6 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                         <option>Risk Management</option>
                       </select>
                     </div>
-                    <div className="space-y-2 col-span-full">
-                      <label className="text-sm font-bold text-[#1A1A1A]/80 uppercase tracking-wide flex items-center gap-2">
-                        <FileText size={16} className="text-[#00A86B]" />
-                        Problem Description <span className="text-[#1A1A1A]/40 normal-case">(Optional)</span>
-                      </label>
-                      <textarea
-                        value={options.problemDescription}
-                        onChange={(e) => setOptions({ ...options, problemDescription: e.target.value })}
-                        placeholder="Briefly describe your business problem..."
-                        rows={3}
-                        className="w-full p-4 rounded-2xl border-2 border-[#E0E0E0] bg-white/80 backdrop-blur focus:ring-2 focus:ring-[#00A86B]/50 focus:border-[#00A86B] outline-none transition-all hover:border-[#00A86B]/50 resize-none shadow-sm hover:shadow-md"
-                      />
-                    </div>
                   </>
                 )}
 
@@ -426,7 +414,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               {/* AI Avatar */}
               <div className="relative">
                 <motion.div
-                  className="w-36 h-36 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B] border-4 border-white/50 flex items-center justify-center overflow-hidden shadow-2xl relative"
+                  className="w-44 h-44 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B] border-4 border-white/50 flex items-center justify-center overflow-hidden shadow-2xl relative"
                   animate={{
                     boxShadow: [
                       "0 0 30px rgba(0, 120, 215, 0.3)",
@@ -442,11 +430,17 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                     animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   />
-                  <User size={72} className="text-white relative z-10" />
+                  <Image
+                    src={getConsultantAvatar(options.consultingArea, options.language)}
+                    alt="AI Consultant"
+                    width={176}
+                    height={176}
+                    className="relative z-10 object-cover scale-125"
+                  />
                 </motion.div>
                 {status === 'speaking' && (
                   <motion.div
-                    className="absolute -bottom-2 -right-2 bg-[#00A86B] p-3 rounded-full shadow-xl border-2 border-white"
+                    className="absolute -bottom-2 -right-2 bg-[#00A86B] p-3 rounded-full shadow-xl border-2 border-white z-20"
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   >
@@ -555,9 +549,9 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                   )}
                 </motion.button>
 
-                <p className="text-sm font-semibold text-[#1A1A1A]/60 uppercase tracking-wide">
+                {/* <p className="text-sm font-semibold text-[#1A1A1A]/60 uppercase tracking-wide">
                   {status === 'listening' ? "Listening..." : "Push to Talk"}
-                </p>
+                </p> */}
               </div>
             </motion.div>
           )}
@@ -569,7 +563,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-white/50 text-center relative overflow-y-auto max-h-[calc(100vh-200px)]"
+              className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-white/50 text-center relative max-h-[85vh] flex flex-col"
             >
               {/* Animated background */}
               <motion.div
@@ -578,9 +572,9 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                 transition={{ duration: 4, repeat: Infinity }}
               />
 
-              {/* Corner decorations */}
+              {/* Corner decorations
               <div className="absolute top-0 left-0 w-24 h-24 border-t-4 border-l-4 border-[#0078D7]/30 rounded-tl-3xl" />
-              <div className="absolute bottom-0 right-0 w-24 h-24 border-b-4 border-r-4 border-[#00A86B]/30 rounded-br-3xl" />
+              <div className="absolute bottom-0 right-0 w-24 h-24 border-b-4 border-r-4 border-[#00A86B]/30 rounded-br-3xl" /> */}
 
               <motion.div
                 className="w-24 h-24 bg-gradient-to-br from-[#0078D7] to-[#00A86B] rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl"
@@ -606,7 +600,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               </motion.h2>
 
               <motion.div
-                className="bg-gradient-to-br from-[#F8F9FA] to-[#E0F2FE] p-8 rounded-2xl mb-6 border border-[#0078D7]/20 shadow-inner"
+                className="bg-gradient-to-br from-[#F8F9FA] to-[#E0F2FE] p-8 rounded-2xl mb-6 border border-[#0078D7]/20 shadow-inner overflow-y-auto max-h-[400px]"
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
