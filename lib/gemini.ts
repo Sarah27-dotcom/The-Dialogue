@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = `You are the 'AI Consultant'. You are a high-performance training assistant for Prasetiya Mulya students and Leverate professionals.
+const SYSTEM_INSTRUCTION = `You are the 'AI Consultant'. You are a high-performance training assistant for professionals.
 
 CORE MODES:
 1. INTERVIEW COACH: Act as a high-level HR Director. Tone: Critical, professional, and challenging.
