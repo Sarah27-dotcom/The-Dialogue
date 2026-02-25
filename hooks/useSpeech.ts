@@ -137,7 +137,12 @@ export function useSpeech() {
       window.speechSynthesis.cancel();
 
       // Clean text from tags for cleaner speech
-      const cleanText = text.replace(/\[WAVE:ON\]|\[FINISH\].*$/g, '').trim();
+      // Remove [WAVE:ON] tag and everything from [FINISH] onwards (including newlines)
+      let cleanText = text.replace(/\[WAVE:ON\]/g, '').trim();
+      const finishIndex = cleanText.indexOf('[FINISH]');
+      if (finishIndex !== -1) {
+        cleanText = cleanText.substring(0, finishIndex).trim();
+      }
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.onstart = () => setIsSpeaking(true);
