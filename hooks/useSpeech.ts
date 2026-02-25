@@ -156,7 +156,7 @@ export function useSpeech() {
 
       // Use cached voice if available, otherwise find from cache
       if (selectedVoiceRef.current.has(langCode)) {
-        utterance.voice = selectedVoiceRef.current.get(langCode);
+        utterance.voice = selectedVoiceRef.current.get(langCode) || null;
         utterance.lang = langCode;
       } else {
         // Find and cache voice for this language

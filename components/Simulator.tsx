@@ -129,7 +129,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       speak(response || '', options.language, () => {
         if (response?.includes('[FINISH]')) {
           // Use regex to handle any whitespace around [FINISH] and ensure clean extraction
-          const finishMatch = response.match(/\[FINISH\]\s*(.+)$/s);
+          const finishMatch = response.match(/\[FINISH\]\s*([\s\S]+)$/);
           const summaryPart = finishMatch ? finishMatch[1].trim() : null;
           setSummary(summaryPart || 'Session completed.');
           setStep('finished');
@@ -624,7 +624,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                       const items = text.split(/(?:^|\n)\s*\d+[\.\)]\s+/).filter(item => item.trim());
 
                       // Get all the numbers
-                      const numbers = [];
+                      const numbers: string[] = [];
                       let match;
                       const regex = /(?:^|\n)\s*(\d+)[\.\)]\s+/g;
                       while ((match = regex.exec(text)) !== null) {
