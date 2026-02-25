@@ -346,9 +346,9 @@ export default function Page() {
           className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6"
         >
           {[
-            { icon: Sparkles, label: "AI-Powered", desc: "Smart conversations" },
-            { icon: Zap, label: "Real-Time", desc: "Instant feedback" },
-            { icon: Target, label: "Goal Oriented", desc: "Track your progress" }
+            { icon: Sparkles, label: "AI-Powered" },
+            { icon: Zap, label: "Real-Time" },
+            { icon: Target, label: "Instant Feedback" }
           ].map((feature, index) => (
             <motion.div
               key={index}
