@@ -14,14 +14,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'THE DIALOGUE | Prasmul x Leverate',
+  title: 'Work Reimagined In The Age of AI',
   description: 'AI Executive Coach for Speaking Training',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
-      <body suppressHydrationWarning className="font-sans bg-[#F8F9FA] text-[#003366]">
+      <body suppressHydrationWarning className="font-sans bg-[#F8F9FA] text-[#1A1A1A]">
         {children}
       </body>
     </html>

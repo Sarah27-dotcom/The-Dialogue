@@ -1,1 +1,58 @@
 @import "tailwindcss";
+
+@theme {
+  --font-family-sans: 'Montserrat', 'Inter', sans-serif;
+
+  /* Leverate Brand Colors */
+  --color-leverate-black: #1A1A1A;
+  --color-leverate-gray: #E0E0E0;
+
+  /* Prasmul-ELI Brand Colors */
+  --color-prasmul-blue: #0078D7;
+  --color-prasmul-green: #00A86B;
+  --color-prasmul-accent: #0080FF;
+
+  /* Neutral Colors */
+  --color-surface: #F8F9FA;
+  --color-white: #FFFFFF;
+}
+
+* {
+  font-family: 'Montserrat', 'Inter', sans-serif;
+}
+
+body {
+  font-weight: 500;
+  font-size: 16px;
+  color: #1A1A1A;
+  background: #F8F9FA;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+/* Smooth transitions */
+button, a, .clickable {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F8F9FA;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E0E0E0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0078D7;
+}

@@ -1,24 +1,30 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Mic, 
-  Square, 
-  RefreshCw, 
-  ChevronLeft, 
-  User, 
-  Briefcase, 
-  TrendingUp, 
+import {
+  Mic,
+  Square,
+  RefreshCw,
+  ChevronLeft,
+  User,
+  Briefcase,
+  TrendingUp,
   GraduationCap,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  X,
+  FileText,
+  Home,
+  Sparkles
 } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { getGeminiResponse } from '@/lib/gemini';
-import confetti from 'canvas-confetti';
+import { logUsage } from '@/lib/supabase';
+import { getConsultantAvatar } from '@/lib/avatar';
 
-type Mode = 'Interview' | 'Sales' | 'IELTS' | null;
+type Mode = 'Interview' | 'Consultant' | 'IELTS' | null;
 
 interface SimulatorProps {
   mode: Mode;
@@ -27,21 +33,22 @@ interface SimulatorProps {
 
 export default function Simulator({ mode, onBack }: SimulatorProps) {
   const [step, setStep] = useState<'setup' | 'active' | 'finished'>('setup');
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [options, setOptions] = useState({
     jobTitle: 'Marketing Manager',
     industry: 'Technology',
-    productName: 'SaaS Cloud Solution',
+    consultingArea: 'Business Strategy',
     difficulty: 'Normal',
     language: 'English',
     ieltsPart: 'Part 1'
   });
-  
+
   const [turnCount, setTurnCount] = useState(0);
   const [history, setHistory] = useState<any[]>([]);
   const [aiResponse, setAiResponse] = useState('');
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [summary, setSummary] = useState('');
-  
+
   const { isListening, transcript, startListening, stopListening, speak, isSpeaking, cancelSpeech } = useSpeech();
   const transcriptProcessed = useRef(false);
 
@@ -55,12 +62,30 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     setStep('active');
     setStatus('processing');
     setTurnCount(1);
-    
+
+    // Determine category based on mode
+    let category = '';
+    if (mode === 'Interview') {
+      category = `${options.jobTitle} - ${options.industry}`;
+    } else if (mode === 'Consultant') {
+      category = options.consultingArea;
+    } else {
+      category = options.ieltsPart;
+    }
+
+    // Log usage to Supabase
+    await logUsage({
+      menu_type: mode || '',
+      category: category,
+      difficulty: options.difficulty,
+      language: options.language,
+    });
+
     let initialPrompt = '';
     if (mode === 'Interview') {
-      initialPrompt = `Start session: [Mode: Interview], [Job: ${options.jobTitle}], [Industry: ${options.industry}], [Difficulty: ${options.difficulty}], [Language: ${options.language}]`;
-    } else if (mode === 'Sales') {
-      initialPrompt = `Start session: [Mode: Sales], [Product: ${options.productName}], [Difficulty: ${options.difficulty}], [Language: ${options.language}]`;
+      initialPrompt = `Start session: [Mode: Interview], [Job: ${options.jobTitle}], [Industry: ${options.industry}], [Language: ${options.language}]`;
+    } else if (mode === 'Consultant') {
+      initialPrompt = `Start session: [Mode: AI Consultant], [Area: ${options.consultingArea}], [Language: ${options.language}]`;
     } else {
       initialPrompt = `Start session: [Mode: IELTS], [Part: ${options.ieltsPart}], [Language: ${options.language}]`;
     }
@@ -70,7 +95,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       setAiResponse(response || '');
       setHistory([{ role: 'user', parts: [{ text: initialPrompt }] }, { role: 'model', parts: [{ text: response }] }]);
       setStatus('speaking');
-      speak(response || '', () => setStatus('idle'));
+      speak(response || '', options.language, () => setStatus('idle'));
     } catch (error) {
       console.error(error);
       setStatus('idle');
@@ -81,36 +106,33 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     if (status === 'idle') {
       transcriptProcessed.current = false;
       setStatus('listening');
-      startListening();
+      startListening(options.language);
     } else if (status === 'listening') {
       stopListening();
+      setStatus('idle'); // Immediately update status when stopping
     }
   };
-  
+
   const processUserMessage = useCallback(async (text: string) => {
     setStatus('processing');
     const newHistory = [...history, { role: 'user', parts: [{ text }] }];
-    
+
     try {
       const response = await getGeminiResponse(text, history);
       setAiResponse(response || '');
       setHistory([...newHistory, { role: 'model', parts: [{ text: response }] }]);
-      
+
       const newTurnCount = turnCount + 1;
       setTurnCount(newTurnCount);
 
       setStatus('speaking');
-      speak(response || '', () => {
+      speak(response || '', options.language, () => {
         if (response?.includes('[FINISH]')) {
-          const summaryPart = response.split('[FINISH]')[1]?.trim();
+          // Use regex to handle any whitespace around [FINISH] and ensure clean extraction
+          const finishMatch = response.match(/\[FINISH\]\s*(.+)$/s);
+          const summaryPart = finishMatch ? finishMatch[1].trim() : null;
           setSummary(summaryPart || 'Session completed.');
           setStep('finished');
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#003366', '#FFCC00', '#F8F9FA']
-          });
         } else if (newTurnCount >= 5) {
           setSummary('Maximum turns reached. Session completed.');
           setStep('finished');
@@ -122,7 +144,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       console.error(error);
       setStatus('idle');
     }
-  }, [history, turnCount, speak]);
+  }, [history, turnCount, speak, options.language]);
 
   // Handle transcript completion
   useEffect(() => {
@@ -145,78 +167,181 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     setSummary('');
   };
 
+  const handleBack = () => {
+    // Only show confirmation if session is active
+    if (step === 'active') {
+      setShowExitConfirm(true);
+    } else {
+      cancelSpeech();
+      onBack();
+    }
+  };
+
+  const confirmExit = () => {
+    cancelSpeech();
+    setShowExitConfirm(false);
+    onBack();
+  };
+
+  const cancelExit = () => {
+    setShowExitConfirm(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
       {/* Header */}
-      <header className="bg-[#003366] text-white p-4 flex items-center justify-between shadow-lg">
-        <button 
-          onClick={onBack}
-          className="flex items-center gap-2 hover:text-[#FFCC00] transition-colors"
+      <header className="bg-gradient-to-r from-[#1A1A1A] via-[#0078D7] to-[#00A86B] px-6 py-4 flex items-center justify-between shadow-xl relative overflow-hidden">
+        {/* Animated gradient line */}
+        <motion.div
+          className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+          animate={{ x: ['-100%', '100%'] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 hover:text-white/80 transition-colors text-white z-10"
         >
           <ChevronLeft size={20} />
           <span className="font-medium">Back</span>
         </button>
-        <h1 className="text-xl font-bold tracking-tight">
-          {mode?.toUpperCase()} SIMULATOR
+        <h1 className="text-xl font-bold tracking-tight text-white">
+          {mode === 'Consultant' ? 'AI Consultant' : `${mode?.toUpperCase()} SIMULATOR`}
         </h1>
-        <div className="w-10" /> {/* Spacer */}
+        <div className="w-10" />
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col">
+      <main className="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col relative">
+        {/* Animated background glow */}
+        <motion.div
+          className="absolute inset-0 -z-10 pointer-events-none"
+        >
+          <motion.div
+            className="absolute top-0 left-1/4 w-96 h-96 bg-[#0078D7]/10 rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.2, 1],
+              x: [0, 30, 0],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          <motion.div
+            className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#00A86B]/10 rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.3, 1],
+              x: [0, -30, 0],
+            }}
+            transition={{
+              duration: 12,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+        </motion.div>
+
         <AnimatePresence mode="wait">
           {step === 'setup' && (
-            <motion.div 
+            <motion.div
               key="setup"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/50 relative overflow-hidden"
             >
-              <h2 className="text-2xl font-bold mb-6 text-[#003366]">Session Configuration</h2>
-              
+              {/* Corner accent decorations */}
+              <div className="absolute top-0 left-0 w-20 h-20 border-t-2 border-l-2 border-[#0078D7]/20 rounded-tl-3xl" />
+              <div className="absolute bottom-0 right-0 w-20 h-20 border-b-2 border-r-2 border-[#00A86B]/20 rounded-br-3xl" />
+
+              <h2 className="text-2xl font-bold mb-2 text-[#1A1A1A]">Session Configuration</h2>
+              <motion.p
+                className="text-sm text-[#1A1A1A]/60 mb-6"
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 3, repeat: Infinity }}
+              >
+                Customize your consultation experience
+              </motion.p>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {mode === 'Interview' && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Job Title</label>
-                      <input 
-                        type="text" 
+                      <label className="text-sm font-semibold text-[#1A1A1A]/70 uppercase tracking-wide">Job Title</label>
+                      <select
                         value={options.jobTitle}
-                        onChange={(e) => setOptions({...options, jobTitle: e.target.value})}
-                        className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
-                      />
+                        onChange={(e) => setOptions({ ...options, jobTitle: e.target.value })}
+                        className="w-full p-3 rounded-xl border border-[#E0E0E0] focus:ring-2 focus:ring-[#0078D7] focus:border-transparent outline-none transition-all bg-white hover:border-[#0078D7]"
+                      >
+                        <option>Marketing Manager</option>
+                        <option>Product Manager</option>
+                        <option>Software Engineer</option>
+                        <option>Data Analyst</option>
+                        <option>Sales Manager</option>
+                        <option>Business Analyst</option>
+                        <option>HR Manager</option>
+                        <option>Finance Manager</option>
+                        <option>Consultant</option>
+                        <option>Project Manager</option>
+                      </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Industry</label>
-                      <input 
-                        type="text" 
+                      <label className="text-sm font-semibold text-[#1A1A1A]/70 uppercase tracking-wide">Industry</label>
+                      <select
                         value={options.industry}
-                        onChange={(e) => setOptions({...options, industry: e.target.value})}
-                        className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
-                      />
+                        onChange={(e) => setOptions({ ...options, industry: e.target.value })}
+                        className="w-full p-3 rounded-xl border border-[#E0E0E0] focus:ring-2 focus:ring-[#0078D7] focus:border-transparent outline-none transition-all bg-white hover:border-[#0078D7]"
+                      >
+                        <option>Technology</option>
+                        <option>Finance</option>
+                        <option>Healthcare</option>
+                        <option>Retail</option>
+                        <option>Manufacturing</option>
+                        <option>Consulting</option>
+                        <option>Education</option>
+                        <option>Telecommunications</option>
+                        <option>Banking</option>
+                        <option>E-commerce</option>
+                      </select>
                     </div>
                   </>
                 )}
 
-                {mode === 'Sales' && (
-                  <div className="space-y-2 col-span-full">
-                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Product/Service Name</label>
-                    <input 
-                      type="text" 
-                      value={options.productName}
-                      onChange={(e) => setOptions({...options, productName: e.target.value})}
-                      className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
-                    />
-                  </div>
+                {mode === 'Consultant' && (
+                  <>
+                    <div className="space-y-2 col-span-full">
+                      <label className="text-sm font-bold text-[#1A1A1A]/80 uppercase tracking-wide flex items-center gap-2">
+                        <Briefcase size={16} className="text-[#0078D7]" />
+                        Consulting Area
+                      </label>
+                      <select
+                        value={options.consultingArea}
+                        onChange={(e) => setOptions({ ...options, consultingArea: e.target.value })}
+                        className="w-full p-4 rounded-2xl border-2 border-[#E0E0E0] bg-white/80 backdrop-blur focus:ring-2 focus:ring-[#0078D7]/50 focus:border-[#0078D7] outline-none transition-all hover:border-[#0078D7]/50 shadow-sm hover:shadow-md"
+                      >
+                        <option>Business Strategy</option>
+                        <option>Marketing & Growth</option>
+                        <option>Operations & Efficiency</option>
+                        <option>Product Development</option>
+                        <option>Team Management</option>
+                        <option>Financial Planning</option>
+                        <option>Digital Transformation</option>
+                        <option>Customer Experience</option>
+                        <option>Organizational Change</option>
+                        <option>Risk Management</option>
+                      </select>
+                    </div>
+                  </>
                 )}
 
                 {mode === 'IELTS' && (
                   <div className="space-y-2 col-span-full">
-                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">IELTS Part</label>
-                    <select 
+                    <label className="text-sm font-semibold text-[#1A1A1A]/70 uppercase tracking-wide">IELTS Part</label>
+                    <select
                       value={options.ieltsPart}
-                      onChange={(e) => setOptions({...options, ieltsPart: e.target.value})}
-                      className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
+                      onChange={(e) => setOptions({ ...options, ieltsPart: e.target.value })}
+                      className="w-full p-3 rounded-xl border border-[#E0E0E0] focus:ring-2 focus:ring-[#0078D7] focus:border-transparent outline-none transition-all bg-white hover:border-[#0078D7]"
                     >
                       <option>Part 1</option>
                       <option>Part 2</option>
@@ -225,173 +350,447 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Difficulty</label>
-                  <select 
-                    value={options.difficulty}
-                    onChange={(e) => setOptions({...options, difficulty: e.target.value})}
-                    className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
-                  >
-                    <option>Normal</option>
-                    <option>Hard</option>
-                    <option>Expert</option>
-                  </select>
-                </div>
+                {mode === 'IELTS' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Proficiency Level</label>
+                    <select
+                      value={options.difficulty}
+                      onChange={(e) => setOptions({ ...options, difficulty: e.target.value })}
+                      className="w-full p-3 rounded-xl border border-[#E0E0E0] focus:ring-2 focus:ring-[#0078D7] focus:border-transparent outline-none transition-all bg-white hover:border-[#0078D7]"
+                    >
+                      <option>A1 (Beginner)</option>
+                      <option>A2 (Elementary)</option>
+                      <option>B1 (Intermediate)</option>
+                      <option>B2 (Upper Intermediate)</option>
+                      <option>C1 (Advanced)</option>
+                      <option>C2 (Proficiency)</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Language</label>
-                  <select 
+                  <select
                     value={options.language}
-                    onChange={(e) => setOptions({...options, language: e.target.value})}
-                    className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#003366] focus:border-transparent outline-none transition-all"
+                    onChange={(e) => setOptions({ ...options, language: e.target.value })}
+                    disabled={mode === 'IELTS'}
+                    className="w-full p-3 rounded-xl border border-[#E0E0E0] focus:ring-2 focus:ring-[#0078D7] focus:border-transparent outline-none transition-all bg-white hover:border-[#0078D7] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option>English</option>
-                    <option>Indonesian</option>
+                    <option value="English">English</option>
+                    {mode !== 'IELTS' && <option value="Indonesian">Indonesian</option>}
                   </select>
+                  {mode === 'IELTS' && (
+                    <p className="text-xs text-gray-400 italic">IELTS is only available in English</p>
+                  )}
                 </div>
               </div>
 
-              <button 
+              <motion.button
                 onClick={startSession}
-                className="w-full bg-[#003366] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#002244] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-[#0078D7] to-[#00A86B] text-white py-4 rounded-2xl font-bold text-lg hover:shadow-2xl transition-all flex items-center justify-center gap-2 relative overflow-hidden group"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                START SESSION
-              </button>
+                <motion.span
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+                <span className="relative z-10">START SESSION</span>
+                <Sparkles size={20} className="relative z-10" />
+              </motion.button>
             </motion.div>
           )}
 
           {step === 'active' && (
-            <motion.div 
+            <motion.div
               key="active"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
               className="flex-1 flex flex-col items-center justify-between py-8"
             >
               {/* AI Avatar */}
               <div className="relative">
-                <div className="w-32 h-32 rounded-full bg-[#003366] border-4 border-[#FFCC00] flex items-center justify-center overflow-hidden shadow-2xl">
-                  <User size={64} className="text-[#FFCC00]" />
-                </div>
+                <motion.div
+                  className="w-44 h-44 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B] border-4 border-white/50 flex items-center justify-center overflow-hidden shadow-2xl relative"
+                  animate={{
+                    boxShadow: [
+                      "0 0 30px rgba(0, 120, 215, 0.3)",
+                      "0 0 50px rgba(0, 168, 107, 0.4)",
+                      "0 0 30px rgba(0, 120, 215, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  {/* Pulsing rings */}
+                  <motion.div
+                    className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B]"
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                  <Image
+                    src={getConsultantAvatar(options.consultingArea, options.language)}
+                    alt="AI Consultant"
+                    width={176}
+                    height={176}
+                    className="relative z-10 object-cover scale-125"
+                  />
+                </motion.div>
                 {status === 'speaking' && (
-                  <motion.div 
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute -bottom-2 -right-2 bg-[#FFCC00] p-2 rounded-full shadow-lg"
+                  <motion.div
+                    className="absolute -bottom-2 -right-2 bg-[#00A86B] p-3 rounded-full shadow-xl border-2 border-white z-20"
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
                   >
-                    <TrendingUp size={20} className="text-[#003366]" />
+                    <TrendingUp size={20} className="text-white" />
                   </motion.div>
                 )}
               </div>
 
               {/* Waveform Animation */}
-              <div className="w-full h-32 flex items-center justify-center gap-1">
+              <div className="w-full h-32 flex items-center justify-center gap-1.5 px-8">
                 {waveformValues.map((val, i) => (
                   <motion.div
                     key={i}
-                    animate={{ 
-                      height: status === 'speaking' || status === 'listening' 
-                        ? [20, val.height, 20] 
-                        : 10 
+                    animate={{
+                      height: status === 'speaking' || status === 'listening'
+                        ? [20, val.height, 20]
+                        : 10,
+                      opacity: status === 'idle' ? 0.4 : 1
                     }}
-                    transition={{ 
-                      repeat: Infinity, 
+                    transition={{
+                      repeat: Infinity,
                       duration: val.duration,
-                      ease: "easeInOut"
+                      ease: [0.4, 0, 0.2, 1],
+                      delay: i * 0.02
                     }}
-                    className="w-2 bg-[#FFCC00] rounded-full"
+                    className="w-2.5 bg-gradient-to-t from-[#0078D7] via-[#00A86B] to-[#0080FF] rounded-full shadow-lg shadow-[#0078D7]/30"
                   />
                 ))}
               </div>
 
               {/* AI Response Display */}
-              <div className="w-full max-w-2xl bg-white p-6 rounded-2xl shadow-md border border-gray-100 min-h-[120px] flex items-center justify-center text-center">
+              <div className="w-full max-w-2xl bg-white/90 backdrop-blur-xl p-8 rounded-3xl shadow-xl border border-white/50 min-h-[140px] flex items-center justify-center text-center relative">
+                {/* Decorative glow */}
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/5 to-[#00A86B]/5 rounded-3xl -z-10"
+                  animate={{ opacity: [0.5, 0.8, 0.5] }}
+                  transition={{ duration: 4, repeat: Infinity }}
+                />
                 {status === 'processing' ? (
-                  <div className="flex items-center gap-3 text-gray-400 italic">
-                    <RefreshCw className="animate-spin" size={20} />
-                    Coach is thinking...
-                  </div>
+                  <motion.div
+                    className="flex items-center gap-3 text-[#0078D7] font-semibold"
+                    animate={{ opacity: [0.6, 1, 0.6] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <RefreshCw className="animate-spin" size={24} />
+                    Consultant is analyzing...
+                  </motion.div>
                 ) : (
-                  <p className="text-lg font-medium leading-relaxed">
-                    {aiResponse.replace(/\[WAVE:ON\]|\[FINISH\].*$/g, '').trim() || "Ready to begin."}
+                  <p className="text-lg font-medium leading-relaxed text-[#1A1A1A]/90">
+                    {aiResponse.replace(/\[WAVE:ON\]|\[FINISH\][\s\S]*$/g, '').trim() || "Ready to begin your consultation."}
                   </p>
                 )}
               </div>
 
               {/* Controls */}
               <div className="flex flex-col items-center gap-4 w-full">
-                <div className="text-sm font-bold text-[#003366] bg-[#FFCC00] px-4 py-1 rounded-full">
-                  TURN {turnCount} / 5
-                </div>
-                
-                <button 
+                <motion.div
+                  className="text-sm font-bold text-white bg-gradient-to-r from-[#0078D7] to-[#00A86B] px-6 py-2 rounded-full shadow-lg"
+                  animate={{
+                    boxShadow: [
+                      "0 0 20px rgba(0, 120, 215, 0.3)",
+                      "0 0 30px rgba(0, 168, 107, 0.4)",
+                      "0 0 20px rgba(0, 120, 215, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  {mode === 'Consultant' ? (
+                    turnCount === 0 ? (
+                      'Connecting...'
+                    ) : turnCount < 5 ? (
+                      `Information Gathering • Turn ${turnCount}/5`
+                    ) : (
+                      'Solution Delivery'
+                    )
+                  ) : (
+                    `TURN ${turnCount} / 5`
+                  )}
+                </motion.div>
+
+                <motion.button
                   onClick={handlePushToTalk}
                   disabled={status === 'processing' || status === 'speaking'}
+                  whileHover={{ scale: status === 'listening' ? 1 : 1.05 }}
+                  whileTap={{ scale: status === 'listening' ? 1 : 0.95 }}
                   className={`
-                    w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all
-                    ${status === 'listening' 
-                      ? 'bg-red-500 hover:bg-red-600 scale-110' 
-                      : 'bg-[#003366] hover:bg-[#002244]'}
-                    ${(status === 'processing' || status === 'speaking') ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
+                    relative w-28 h-28 rounded-full flex items-center justify-center
+                    ${status === 'listening'
+                      ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-xl shadow-red-500/30'
+                      : 'bg-gradient-to-br from-[#0078D7] to-[#00A86B] shadow-xl shadow-[#0078D7]/30'}
+                    ${(status === 'processing' || status === 'speaking') ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
-                  {status === 'listening' ? (
-                    <Square size={32} className="text-white" />
-                  ) : (
-                    <Mic size={32} className="text-white" />
+                  {/* Pulsing ring */}
+                  {status !== 'listening' && (status !== 'processing' && status !== 'speaking') && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B]"
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    />
                   )}
-                </button>
-                
-                <p className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
+                  {status === 'listening' ? (
+                    <Square size={36} className="text-white" />
+                  ) : (
+                    <Mic size={36} className="text-white" />
+                  )}
+                </motion.button>
+
+                {/* <p className="text-sm font-semibold text-[#1A1A1A]/60 uppercase tracking-wide">
                   {status === 'listening' ? "Listening..." : "Push to Talk"}
-                </p>
+                </p> */}
               </div>
             </motion.div>
           )}
 
           {step === 'finished' && (
-            <motion.div 
+            <motion.div
               key="finished"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-3xl shadow-2xl p-10 border-4 border-[#FFCC00] text-center"
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-white/50 text-center relative max-h-[85vh] flex flex-col"
             >
-              <div className="w-20 h-20 bg-[#003366] rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 size={40} className="text-[#FFCC00]" />
-              </div>
-              
-              <h2 className="text-3xl font-bold text-[#003366] mb-4">Session Complete</h2>
-              
-              <div className="bg-[#F8F9FA] p-6 rounded-2xl mb-8 border border-gray-200">
-                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3">Coach Evaluation</h3>
-                <p className="text-xl font-medium text-[#003366] italic">
-                  &quot;{summary}&quot;
-                </p>
-              </div>
+              {/* Animated background */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/5 to-[#00A86B]/5 pointer-events-none"
+                animate={{ opacity: [0.5, 0.8, 0.5] }}
+                transition={{ duration: 4, repeat: Infinity }}
+              />
 
-              <div className="flex gap-4">
-                <button 
+              {/* Corner decorations
+              <div className="absolute top-0 left-0 w-24 h-24 border-t-4 border-l-4 border-[#0078D7]/30 rounded-tl-3xl" />
+              <div className="absolute bottom-0 right-0 w-24 h-24 border-b-4 border-r-4 border-[#00A86B]/30 rounded-br-3xl" /> */}
+
+              <motion.div
+                className="w-24 h-24 bg-gradient-to-br from-[#0078D7] to-[#00A86B] rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+              >
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                >
+                  <CheckCircle2 size={48} className="text-white" />
+                </motion.div>
+              </motion.div>
+
+              <motion.h2
+                className="text-3xl font-bold text-[#1A1A1A] mb-4"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                Consultation Complete
+              </motion.h2>
+
+              <motion.div
+                className="bg-gradient-to-br from-[#F8F9FA] to-[#E0F2FE] p-8 rounded-2xl mb-6 border border-[#0078D7]/20 shadow-inner overflow-y-auto max-h-[400px]"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                {/* AI Solution Section */}
+                <h3 className="text-sm font-bold text-[#0078D7] uppercase tracking-wide mb-5 flex items-center justify-center gap-2">
+                  <FileText size={16} />
+                  AI Solution
+                </h3>
+                <div className="text-left space-y-4 text-[#1A1A1A] leading-relaxed">
+                  {(() => {
+                    // Enhanced parsing for AI summary with better readability
+                    const text = summary.trim();
+
+                    // Check if text contains numbered list pattern (1., 2., etc.)
+                    const numberedItemsPattern = /(?:^|\n)\s*(\d+)[\.\)]\s+/g;
+                    const hasNumberedList = numberedItemsPattern.test(text);
+
+                    if (hasNumberedList) {
+                      // Split by numbered list pattern and extract items
+                      const items = text.split(/(?:^|\n)\s*\d+[\.\)]\s+/).filter(item => item.trim());
+
+                      // Get all the numbers
+                      const numbers = [];
+                      let match;
+                      const regex = /(?:^|\n)\s*(\d+)[\.\)]\s+/g;
+                      while ((match = regex.exec(text)) !== null) {
+                        numbers.push(match[1]);
+                      }
+
+                      return items.map((item, idx) => {
+                        const cleanItem = item.trim();
+                        // Check if it's a header (ends with colon or is short uppercase)
+                        if (cleanItem.endsWith(':') || (cleanItem.length < 50 && cleanItem === cleanItem.toUpperCase())) {
+                          return (
+                            <h4 key={idx} className="font-bold text-[#0078D7] text-base mt-6 first:mt-0">
+                              {cleanItem}
+                            </h4>
+                          );
+                        }
+                        // Regular numbered item - each on new line with better spacing
+                        return (
+                          <div key={idx} className="flex items-start gap-4 py-2">
+                            <span className="text-[#0078D7] font-bold text-xl min-w-[32px] flex-shrink-0">
+                              {numbers[idx] || idx + 1}
+                            </span>
+                            <span className="flex-1 text-base pt-0.5">{cleanItem}</span>
+                          </div>
+                        );
+                      });
+                    }
+
+                    // Fallback: split by newlines for non-numbered text
+                    const lines = text.split('\n').filter(line => line.trim());
+                    return lines.map((line, idx) => {
+                      const trimmedLine = line.trim();
+
+                      // Handle bullet points
+                      if (trimmedLine.match(/^[\-\*•]\s+/)) {
+                        return (
+                          <div key={idx} className="flex items-start gap-3 py-2">
+                            <span className="text-[#0078D7] font-bold text-xl">•</span>
+                            <span className="flex-1 text-base pt-0.5">{trimmedLine.replace(/^[\-\*•]\s+/, '')}</span>
+                          </div>
+                        );
+                      }
+
+                      // Handle headers
+                      if (trimmedLine.endsWith(':') || (trimmedLine.length < 50 && trimmedLine === trimmedLine.toUpperCase())) {
+                        return (
+                          <h4 key={idx} className="font-bold text-[#0078D7] text-base mt-6 first:mt-0">
+                            {trimmedLine}
+                          </h4>
+                        );
+                      }
+
+                      // Regular paragraph - each on new line
+                      return (
+                        <p key={idx} className="text-base py-2">
+                          {trimmedLine}
+                        </p>
+                      );
+                    });
+                  })()}
+                </div>
+              </motion.div>
+
+              {/* Upcoming Programs Message */}
+              <motion.div
+                className="bg-gradient-to-r from-[#0078D7]/10 to-[#00A86B]/10 p-4 rounded-xl mb-6"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.48 }}
+              >
+                <p className="text-sm text-[#1A1A1A]/80">
+                  Want to learn more? Join our upcoming programs at{' '}
+                  <a
+                    href="https://prasmul-eli.co/id/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#0078D7] font-semibold hover:underline"
+                  >
+                    prasmul-eli.co.id
+                  </a>
+                </p>
+              </motion.div>
+
+              <motion.div
+                className="flex gap-4"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                <motion.button
                   onClick={resetSession}
-                  className="flex-1 bg-[#003366] text-white py-4 rounded-xl font-bold hover:bg-[#002244] transition-all"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex-1 bg-gradient-to-r from-[#0078D7] to-[#00A86B] text-white py-4 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
                 >
-                  TRY AGAIN
-                </button>
-                <button 
+                  <RefreshCw size={20} />
+                  Try Again
+                </motion.button>
+                <motion.button
                   onClick={onBack}
-                  className="flex-1 border-2 border-[#003366] text-[#003366] py-4 rounded-xl font-bold hover:bg-gray-50 transition-all"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex-1 border-2 border-[#0078D7] text-[#0078D7] py-4 rounded-2xl font-bold hover:bg-gradient-to-r hover:from-[#0078D7] hover:to-[#00A86B] hover:text-white transition-all flex items-center justify-center gap-2"
                 >
-                  DASHBOARD
-                </button>
-              </div>
+                  <Home size={20} />
+                  Back to Home
+                </motion.button>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
 
       {/* Footer Branding */}
-      <footer className="p-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-        Prasetiya Mulya x Leverate Collaboration
+      <footer className="p-4 text-center text-xs font-semibold text-[#1A1A1A]/50 uppercase tracking-wide">
+        Work Reimagined in The Age of AI
       </footer>
+
+      {/* Exit Confirmation Modal */}
+      <AnimatePresence>
+        {showExitConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-[#1A1A1A]/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+            onClick={cancelExit}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-[#E0E0E0]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle size={24} className="text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-[#1A1A1A]">Exit Session?</h3>
+              </div>
+
+              <p className="text-[#1A1A1A]/70 mb-6 leading-relaxed">
+                Are you sure you want to stop this session? Your progress will be lost.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelExit}
+                  className="flex-1 border-2 border-[#E0E0E0] text-[#1A1A1A]/70 py-3 rounded-xl font-bold hover:bg-[#F8F9FA] transition-all"
+                >
+                  Keep Going
+                </button>
+                <button
+                  onClick={confirmExit}
+                  className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-all"
+                >
+                  Yes, Exit
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
