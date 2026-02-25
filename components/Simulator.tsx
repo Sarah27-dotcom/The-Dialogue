@@ -496,7 +496,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                   </motion.div>
                 ) : (
                   <p className="text-lg font-medium leading-relaxed text-[#1A1A1A]/90">
-                    {aiResponse.replace(/\[WAVE:ON\]|\[FINISH\].*$/g, '').trim() || "Ready to begin your consultation."}
+                    {aiResponse.replace(/\[WAVE:ON\]|\[FINISH\][\s\S]*$/g, '').trim() || "Ready to begin your consultation."}
                   </p>
                 )}
               </div>
