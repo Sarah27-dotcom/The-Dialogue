@@ -17,7 +17,8 @@ import {
   X,
   FileText,
   Home,
-  Sparkles
+  Sparkles,
+  Volume2
 } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { getGeminiResponse } from '@/lib/gemini';
@@ -49,8 +50,9 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [summary, setSummary] = useState('');
 
-  const { isListening, transcript, startListening, stopListening, speak, isSpeaking, cancelSpeech } = useSpeech();
+  const { isListening, transcript, startListening, stopListening, speak, isSpeaking, cancelSpeech, audioEnabled, initializeAudio, speechError } = useSpeech();
   const transcriptProcessed = useRef(false);
+  const [showEnableVoice, setShowEnableVoice] = useState(false);
 
   // Pre-generate random values for waveform
   const waveformValues = React.useMemo(() => [...Array(20)].map((_, i) => ({
@@ -62,6 +64,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     setStep('active');
     setStatus('processing');
     setTurnCount(1);
+    setShowEnableVoice(true); // Show enable voice button when session starts
 
     // Determine category based on mode
     let category = '';
@@ -411,6 +414,90 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               transition={{ duration: 0.2 }}
               className="flex-1 flex flex-col items-center justify-between py-8"
             >
+              {/* Enable Voice Button Overlay for Mobile */}
+              <AnimatePresence>
+                {showEnableVoice && !audioEnabled && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex items-center justify-center p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, y: 20 }}
+                      animate={{ scale: 1, y: 0 }}
+                      exit={{ scale: 0.9, y: 20 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                      className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-white/50"
+                    >
+                      <motion.div
+                        className="w-20 h-20 bg-gradient-to-br from-[#0078D7] to-[#00A86B] rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl"
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <Volume2 size={36} className="text-white" />
+                      </motion.div>
+
+                      <h3 className="text-xl font-bold text-[#1A1A1A] mb-3">
+                        {options.language === 'Indonesian' ? 'Aktifkan Suara' : 'Enable Voice'}
+                      </h3>
+
+                      <p className="text-[#1A1A1A]/70 mb-6 leading-relaxed">
+                        {options.language === 'Indonesian'
+                          ? 'Ketuk tombol di bawah untuk mengaktifkan suara AI. Diperlukan untuk perangkat mobile.'
+                          : 'Tap the button below to enable AI voice. Required for mobile devices.'}
+                      </p>
+
+                      <motion.button
+                        onClick={() => {
+                          const success = initializeAudio();
+                          if (success) {
+                            setShowEnableVoice(false);
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full bg-gradient-to-r from-[#0078D7] to-[#00A86B] text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all"
+                      >
+                        {options.language === 'Indonesian' ? 'Aktifkan Suara' : 'Enable Voice'}
+                      </motion.button>
+
+                      <button
+                        onClick={() => setShowEnableVoice(false)}
+                        className="mt-4 text-sm text-[#1A1A1A]/50 hover:text-[#1A1A1A]/70 transition-colors"
+                      >
+                        {options.language === 'Indonesian' ? 'Lanjut tanpa suara' : 'Continue without voice'}
+                      </button>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Speech Error Message */}
+              <AnimatePresence>
+                {speechError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="absolute top-4 left-4 right-4 bg-red-50 border border-red-200 rounded-xl p-4 z-20"
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-700">{speechError}</p>
+                      <button
+                        onClick={() => {
+                          setShowEnableVoice(true);
+                        }}
+                        className="text-xs text-red-600 font-semibold hover:underline ml-auto"
+                      >
+                        {options.language === 'Indonesian' ? 'Coba Lagi' : 'Retry'}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* AI Avatar */}
               <div className="relative">
                 <motion.div
