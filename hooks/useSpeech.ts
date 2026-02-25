@@ -7,14 +7,11 @@ export function useSpeech() {
   const [transcript, setTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const voicesCacheRef = useRef<SpeechSynthesisVoice[]>([]);
   const selectedVoiceRef = useRef<Map<string, SpeechSynthesisVoice>>(new Map());
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const restartPendingRef = useRef(false);
-  const pendingSpeakRef = useRef<{ text: string; language: string; onEnd?: () => void } | null>(null);
 
   const SILENCE_DELAY_MS = 2000; // Wait 2 seconds of silence before processing
 
@@ -88,31 +85,6 @@ export function useSpeech() {
     }
   }, []);
 
-  // Initialize audio context - must be called from user gesture on mobile
-  const initializeAudio = useCallback(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Try to unlock audio on mobile browsers
-      const speechSynthesis = window.speechSynthesis;
-
-      // Create and play a silent utterance to unlock audio on iOS
-      const silentUtterance = new SpeechSynthesisUtterance('');
-      silentUtterance.volume = 0;
-
-      try {
-        speechSynthesis.speak(silentUtterance);
-        speechSynthesis.cancel(); // Cancel immediately
-      } catch (e) {
-        console.warn('Silent utterance failed:', e);
-      }
-
-      setAudioEnabled(true);
-      setSpeechError(null);
-      return true;
-    }
-    setSpeechError('Speech synthesis not supported in this browser');
-    return false;
-  }, []);
-
   const startListening = useCallback((language: string = 'English') => {
     if (recognitionRef.current) {
       // Clear any existing silence timeout
@@ -161,18 +133,8 @@ export function useSpeech() {
 
   const speak = useCallback((text: string, language: string = 'English', onEnd?: () => void) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Check if audio is enabled (user gesture required for mobile)
-      if (!audioEnabled) {
-        // Store the speak request to retry after audio is enabled
-        pendingSpeakRef.current = { text, language, onEnd };
-        return false;
-      }
-
-      const speechSynthesis = window.speechSynthesis;
-
       // Cancel any ongoing speech
-      speechSynthesis.cancel();
-      setSpeechError(null);
+      window.speechSynthesis.cancel();
 
       // Clean text from tags for cleaner speech
       // Remove [WAVE:ON] tag and everything from [FINISH] onwards (including newlines)
@@ -182,46 +144,10 @@ export function useSpeech() {
         cleanText = cleanText.substring(0, finishIndex).trim();
       }
 
-      // Check if voices are loaded, if not wait for them
-      if (speechSynthesis.getVoices().length === 0) {
-        const voicesHandler = () => {
-          speak(text, language, onEnd);
-          speechSynthesis.onvoiceschanged = null;
-        };
-        speechSynthesis.onvoiceschanged = voicesHandler;
-        return false;
-      }
-
       const utterance = new SpeechSynthesisUtterance(cleanText);
-
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-        setSpeechError(null);
-      };
-
+      utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => {
         setIsSpeaking(false);
-        if (onEnd) onEnd();
-      };
-
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event.error);
-        setIsSpeaking(false);
-
-        // Handle specific errors
-        if (event.error === 'not-allowed') {
-          setSpeechError('Microphone or audio permission denied. Please enable audio permissions in your browser settings.');
-        } else if (event.error === 'canceled') {
-          // Speech was canceled, not really an error
-          setSpeechError(null);
-        } else if (event.error === 'interrupted') {
-          // Speech was interrupted, not really an error
-          setSpeechError(null);
-        } else {
-          setSpeechError(`Speech synthesis error: ${event.error}. Text will be displayed instead.`);
-        }
-
-        // Still call onEnd even on error
         if (onEnd) onEnd();
       };
 
@@ -242,19 +168,9 @@ export function useSpeech() {
         }
       }
 
-      try {
-        speechSynthesis.speak(utterance);
-        return true;
-      } catch (error) {
-        console.error('Failed to speak:', error);
-        setSpeechError('Failed to play audio. Please check your browser settings.');
-        setIsSpeaking(false);
-        if (onEnd) onEnd();
-        return false;
-      }
+      window.speechSynthesis.speak(utterance);
     }
-    return false;
-  }, [audioEnabled]);
+  }, []);
 
   const cancelSpeech = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -263,19 +179,6 @@ export function useSpeech() {
     }
   }, []);
 
-  // Effect to retry pending speak after audio is enabled
-  useEffect(() => {
-    if (audioEnabled && pendingSpeakRef.current) {
-      const { text, language, onEnd } = pendingSpeakRef.current;
-      pendingSpeakRef.current = null;
-
-      // Small delay to ensure audio context is ready
-      setTimeout(() => {
-        speak(text, language, onEnd);
-      }, 100);
-    }
-  }, [audioEnabled, speak]);
-
   return {
     isListening,
     transcript,
@@ -283,10 +186,6 @@ export function useSpeech() {
     stopListening,
     speak,
     isSpeaking,
-    cancelSpeech,
-    audioEnabled,
-    initializeAudio,
-    speechError,
-    voicesLoaded
+    cancelSpeech
   } as const;
 }
