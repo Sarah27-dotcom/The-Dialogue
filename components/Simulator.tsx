@@ -21,7 +21,6 @@ import {
 import { useSpeech } from '@/hooks/useSpeech';
 import { getGeminiResponse } from '@/lib/gemini';
 import { logUsage } from '@/lib/supabase';
-import confetti from 'canvas-confetti';
 
 type Mode = 'Interview' | 'Consultant' | 'IELTS' | null;
 
@@ -128,15 +127,11 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       setStatus('speaking');
       speak(response || '', options.language, () => {
         if (response?.includes('[FINISH]')) {
-          const summaryPart = response.split('[FINISH]')[1]?.trim();
+          // Use regex to handle any whitespace around [FINISH] and ensure clean extraction
+          const finishMatch = response.match(/\[FINISH\]\s*(.+)$/s);
+          const summaryPart = finishMatch ? finishMatch[1].trim() : null;
           setSummary(summaryPart || 'Session completed.');
           setStep('finished');
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#0078D7', '#00A86B', '#0080FF', '#1A1A1A']
-          });
         } else if (newTurnCount >= 5) {
           setSummary('Maximum turns reached. Session completed.');
           setStep('finished');
@@ -574,11 +569,11 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-white/50 text-center relative overflow-hidden"
+              className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-white/50 text-center relative overflow-y-auto max-h-[calc(100vh-200px)]"
             >
               {/* Animated background */}
               <motion.div
-                className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/5 to-[#00A86B]/5"
+                className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/5 to-[#00A86B]/5 pointer-events-none"
                 animate={{ opacity: [0.5, 0.8, 0.5] }}
                 transition={{ duration: 4, repeat: Infinity }}
               />
@@ -611,17 +606,111 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
               </motion.h2>
 
               <motion.div
-                className="bg-gradient-to-br from-[#F8F9FA] to-[#E0F2FE] p-6 rounded-2xl mb-8 border border-[#0078D7]/20 shadow-inner"
+                className="bg-gradient-to-br from-[#F8F9FA] to-[#E0F2FE] p-8 rounded-2xl mb-6 border border-[#0078D7]/20 shadow-inner"
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
               >
-                <h3 className="text-sm font-bold text-[#0078D7] uppercase tracking-wide mb-3 flex items-center justify-center gap-2">
+                {/* AI Solution Section */}
+                <h3 className="text-sm font-bold text-[#0078D7] uppercase tracking-wide mb-5 flex items-center justify-center gap-2">
                   <FileText size={16} />
-                  Consultation Summary
+                  AI Solution
                 </h3>
-                <p className="text-xl font-medium text-[#1A1A1A]/90 italic leading-relaxed">
-                  &quot;{summary}&quot;
+                <div className="text-left space-y-4 text-[#1A1A1A] leading-relaxed">
+                  {(() => {
+                    // Enhanced parsing for AI summary with better readability
+                    const text = summary.trim();
+
+                    // Check if text contains numbered list pattern (1., 2., etc.)
+                    const numberedItemsPattern = /(?:^|\n)\s*(\d+)[\.\)]\s+/g;
+                    const hasNumberedList = numberedItemsPattern.test(text);
+
+                    if (hasNumberedList) {
+                      // Split by numbered list pattern and extract items
+                      const items = text.split(/(?:^|\n)\s*\d+[\.\)]\s+/).filter(item => item.trim());
+
+                      // Get all the numbers
+                      const numbers = [];
+                      let match;
+                      const regex = /(?:^|\n)\s*(\d+)[\.\)]\s+/g;
+                      while ((match = regex.exec(text)) !== null) {
+                        numbers.push(match[1]);
+                      }
+
+                      return items.map((item, idx) => {
+                        const cleanItem = item.trim();
+                        // Check if it's a header (ends with colon or is short uppercase)
+                        if (cleanItem.endsWith(':') || (cleanItem.length < 50 && cleanItem === cleanItem.toUpperCase())) {
+                          return (
+                            <h4 key={idx} className="font-bold text-[#0078D7] text-base mt-6 first:mt-0">
+                              {cleanItem}
+                            </h4>
+                          );
+                        }
+                        // Regular numbered item - each on new line with better spacing
+                        return (
+                          <div key={idx} className="flex items-start gap-4 py-2">
+                            <span className="text-[#0078D7] font-bold text-xl min-w-[32px] flex-shrink-0">
+                              {numbers[idx] || idx + 1}
+                            </span>
+                            <span className="flex-1 text-base pt-0.5">{cleanItem}</span>
+                          </div>
+                        );
+                      });
+                    }
+
+                    // Fallback: split by newlines for non-numbered text
+                    const lines = text.split('\n').filter(line => line.trim());
+                    return lines.map((line, idx) => {
+                      const trimmedLine = line.trim();
+
+                      // Handle bullet points
+                      if (trimmedLine.match(/^[\-\*•]\s+/)) {
+                        return (
+                          <div key={idx} className="flex items-start gap-3 py-2">
+                            <span className="text-[#0078D7] font-bold text-xl">•</span>
+                            <span className="flex-1 text-base pt-0.5">{trimmedLine.replace(/^[\-\*•]\s+/, '')}</span>
+                          </div>
+                        );
+                      }
+
+                      // Handle headers
+                      if (trimmedLine.endsWith(':') || (trimmedLine.length < 50 && trimmedLine === trimmedLine.toUpperCase())) {
+                        return (
+                          <h4 key={idx} className="font-bold text-[#0078D7] text-base mt-6 first:mt-0">
+                            {trimmedLine}
+                          </h4>
+                        );
+                      }
+
+                      // Regular paragraph - each on new line
+                      return (
+                        <p key={idx} className="text-base py-2">
+                          {trimmedLine}
+                        </p>
+                      );
+                    });
+                  })()}
+                </div>
+              </motion.div>
+
+              {/* Upcoming Programs Message */}
+              <motion.div
+                className="bg-gradient-to-r from-[#0078D7]/10 to-[#00A86B]/10 p-4 rounded-xl mb-6"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.48 }}
+              >
+                <p className="text-sm text-[#1A1A1A]/80">
+                  Want to learn more? Join our upcoming programs at{' '}
+                  <a
+                    href="https://prasmul-eli.co/id/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#0078D7] font-semibold hover:underline"
+                  >
+                    prasmul-eli.co.id
+                  </a>
                 </p>
               </motion.div>
 
