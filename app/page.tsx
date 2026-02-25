@@ -6,7 +6,10 @@ import {
   Briefcase,
   TrendingUp,
   GraduationCap,
-  MessageSquare
+  MessageSquare,
+  Sparkles,
+  Zap,
+  Target
 } from 'lucide-react';
 import Simulator from '@/components/Simulator';
 
@@ -25,76 +28,141 @@ const staggerContainer = {
   }
 };
 
+// Floating animation for background elements
+const floatingShape = {
+  animate: {
+    y: [0, -20, 0],
+    rotate: [0, 5, 0]
+  },
+  transition: {
+    duration: 6,
+    repeat: Infinity,
+    ease: "easeInOut" as const
+  }
+};
+
 export default function Page() {
-  const [selectedMode, setSelectedMode] = useState<'Interview' | 'Sales' | 'IELTS' | null>(null);
+  const [selectedMode, setSelectedMode] = useState<'Interview' | 'Consultant' | 'IELTS' | null>(null);
 
   if (selectedMode) {
     return <Simulator mode={selectedMode} onBack={() => setSelectedMode(null)} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
+    <div className="min-h-screen relative overflow-hidden flex flex-col">
+      {/* Animated gradient background */}
+      <motion.div
+        className="absolute inset-0 -z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1 }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-[#F8F9FA] via-[#E0F2FE] to-[#F0FDF4]" />
+        <motion.div
+          className="absolute top-0 left-1/4 w-96 h-96 bg-[#0078D7]/10 rounded-full blur-3xl"
+          animate={{
+            scale: [1, 1.2, 1],
+            x: [0, 50, 0],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#00A86B]/10 rounded-full blur-3xl"
+          animate={{
+            scale: [1, 1.3, 1],
+            x: [0, -50, 0],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#0080FF]/5 rounded-full blur-3xl"
+          animate={{
+            scale: [1, 1.1, 1],
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        />
+      </motion.div>
       {/* Header */}
       <motion.header
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm"
+        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="bg-white/80 backdrop-blur-xl border-b border-white/20 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-lg"
       >
+        {/* Animated gradient line */}
+        <motion.div
+          className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-[#0078D7] via-[#00A86B] to-[#0080FF]"
+          initial={{ width: 0 }}
+          animate={{ width: "100%" }}
+          transition={{ duration: 1, delay: 0.5 }}
+        />
         <div className="flex items-center gap-3">
           <motion.img
-            src="https://www.prasetiyamulya.ac.id/wp-content/uploads/2020/02/logo-universitas-prasetiya-mulya-300x300.png"
-            alt="Prasetiya Mulya"
+            src="https://prasmul-eli.co/logo-prasmul-eli.png"
+            alt="Prasmul Eli"
             className="h-10 w-10 object-contain"
             whileHover={{ scale: 1.05, rotate: 5 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
           />
-          <span className="text-[#0a1628] text-xl font-black">×</span>
+          <span className="text-[#0078D7] text-xl font-black">×</span>
           <motion.img
-            src="https://backend.chatbase.co/storage/v1/object/public/chat-icons/01f5b9f3-3cc3-48bd-87ef-bfcba3e60798/kVXuNq1mKc13vD5qYHMb4.jpg"
+            src="https://framerusercontent.com/images/mBV1A2ME2EGmwwEgreOk4Thkr0.webp"
             alt="Leverate Group"
-            className="h-10 w-10 object-contain rounded-full"
+            className="h-10 w-10 object-contain"
             whileHover={{ scale: 1.05, rotate: -5 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
           />
-          <div className="h-6 w-[1px] bg-gray-200 mx-1" />
-          <h1 className="text-lg md:text-xl font-black tracking-tighter text-[#0a1628]">THE DIALOGUE</h1>
+          <div className="h-6 w-[1px] bg-[#E0E0E0] mx-1" />
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-[#1A1A1A]">Work Reimagined In The Age of AI</h1>
         </div>
-        <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[#0a1628] uppercase tracking-widest">
-          <motion.a
+        <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#1A1A1A]/70 uppercase tracking-wide">
+          {/* <motion.a
             href="#about"
-            className="hover:text-[#1e3a5f] transition-colors cursor-pointer relative"
+            className="hover:text-[#0078D7] transition-colors cursor-pointer relative"
             whileHover={{ y: -2 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             About
             <motion.span
-              className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#1e3a5f]"
+              className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#0078D7]"
               whileHover={{ width: "100%" }}
               transition={{ duration: 0.3 }}
             />
-          </motion.a>
-          <motion.a
+          </motion.a> */}
+          {/* <motion.a
             href="#resources"
-            className="hover:text-[#1e3a5f] transition-colors cursor-pointer relative"
+            className="hover:text-[#0078D7] transition-colors cursor-pointer relative"
             whileHover={{ y: -2 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             Resources
             <motion.span
-              className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#1e3a5f]"
+              className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#0078D7]"
               whileHover={{ width: "100%" }}
               transition={{ duration: 0.3 }}
             />
-          </motion.a>
-          <motion.button
-            className="bg-[#0a1628] text-white px-4 py-2 rounded-full hover:bg-[#07101e] transition-all"
+          </motion.a> */}
+          {/* <motion.button
+            className="bg-gradient-to-r from-[#0078D7] to-[#00A86B] text-white px-4 py-2 rounded-full hover:opacity-90 transition-all"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             Login
-          </motion.button>
+          </motion.button> */}
         </div>
       </motion.header>
 
@@ -104,62 +172,138 @@ export default function Page() {
           variants={staggerContainer}
           initial="initial"
           animate="animate"
-          className="text-center mb-20"
+          className="text-center mb-20 relative"
         >
+          {/* Floating decorative elements */}
+          <motion.div
+            {...floatingShape}
+            className="absolute -top-10 -left-10 w-20 h-20 bg-gradient-to-br from-[#0078D7]/20 to-[#00A86B]/20 rounded-2xl -z-10"
+          />
+          <motion.div
+            {...floatingShape}
+            className="absolute -top-5 -right-5 w-16 h-16 bg-gradient-to-br from-[#00A86B]/20 to-[#0080FF]/20 rounded-full -z-10"
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          />
+
           <motion.div variants={fadeInUp} className="flex flex-col items-center w-full">
             <motion.h2
               variants={fadeInUp}
-              className="text-xs md:text-sm font-bold text-[#0a1628] uppercase tracking-[0.35em] mb-10"
+              className="text-xs md:text-sm font-semibold text-[#0078D7] uppercase tracking-[0.3em] mb-10"
             >
-              A Collaboration
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                ✦
+              </motion.span>
+              {" "}Future Ready Workforce{" "}
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity, delay: 1 }}
+              >
+                ✦
+              </motion.span>
             </motion.h2>
 
-            <div className="flex items-center justify-center gap-4 md:gap-8 w-full max-w-3xl mx-auto">
+            <div className="flex items-center justify-center gap-4 md:gap-8 w-full max-w-3xl mx-auto relative">
               <motion.div
                 variants={fadeInUp}
                 className="flex-shrink-0 flex items-center justify-center w-32 md:w-48"
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: "spring", stiffness: 300, damping: 15 }}
               >
-                <img
-                  src="https://www.prasetiyamulya.ac.id/wp-content/uploads/2020/01/Logo-Universitas-Prasetiya-Mulya.png"
-                  alt="Prasetiya Mulya"
-                  className="h-20 md:h-28 object-contain drop-shadow-xl"
-                />
+                <motion.div
+                  className="relative"
+                  whileHover={{ rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                >
+                  <img
+                    src="https://prasmul-eli.co/logo-prasmul-eli.png"
+                    alt="Prasmul Eli"
+                    className="h-20 md:h-28 object-contain drop-shadow-xl relative z-10"
+                  />
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/30 to-[#00A86B]/30 rounded-full blur-xl -z-10"
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                  />
+                </motion.div>
               </motion.div>
 
               <motion.div
                 variants={fadeInUp}
                 className="flex-shrink-0 relative"
-                whileHover={{ scale: 1.1, rotate: 90 }}
+                whileHover={{ scale: 1.15, rotate: 90 }}
                 transition={{ type: "spring", stiffness: 200, damping: 15 }}
               >
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#1e3a5f] via-[#2d4a6c] to-[#0a1628] flex items-center justify-center shadow-xl ring-4 ring-white">
-                  <span className="text-white text-2xl md:text-3xl font-black">×</span>
-                </div>
-                <div className="absolute inset-0 rounded-full bg-[#1e3a5f] opacity-20 blur-xl" />
+                <motion.div
+                  className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#0078D7] via-[#00A86B] to-[#0080FF] flex items-center justify-center shadow-2xl ring-4 ring-white"
+                  animate={{
+                    boxShadow: [
+                      "0 0 20px rgba(0, 120, 215, 0.3)",
+                      "0 0 40px rgba(0, 168, 107, 0.5)",
+                      "0 0 20px rgba(0, 120, 215, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <span className="text-white text-2xl md:text-3xl font-bold">×</span>
+                </motion.div>
+                <motion.div
+                  className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B]"
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0, 0.2] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
               </motion.div>
 
               <motion.div
                 variants={fadeInUp}
                 className="flex-shrink-0 flex items-center justify-center w-32 md:w-48"
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: "spring", stiffness: 300, damping: 15 }}
               >
-                <img
-                  src="https://framerusercontent.com/images/mBV1A2ME2EGmwwEgreOk4Thkr0.webp"
-                  alt="Leverate Group"
-                  className="h-16 md:h-24 object-contain drop-shadow-xl"
-                />
+                <motion.div
+                  className="relative"
+                  whileHover={{ rotate: -5 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                >
+                  <img
+                    src="https://framerusercontent.com/images/mBV1A2ME2EGmwwEgreOk4Thkr0.webp"
+                    alt="Leverate Group"
+                    className="h-16 md:h-24 object-contain drop-shadow-xl relative z-10"
+                  />
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-br from-[#1A1A1A]/20 to-[#E0E0E0]/50 rounded-full blur-xl -z-10"
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+                    transition={{ duration: 3, repeat: Infinity, delay: 1 }}
+                  />
+                </motion.div>
               </motion.div>
             </div>
 
             <motion.div
               variants={fadeInUp}
-              className="w-24 md:w-32 h-0.5 bg-gradient-to-r from-transparent via-[#0a1628] to-transparent mt-8 mb-6"
-            />
+              className="w-24 md:w-32 h-0.5 bg-gradient-to-r from-transparent via-[#0078D7] to-transparent mt-8 mb-6 relative"
+            >
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-[#00A86B] to-transparent"
+                animate={{ x: ['-100%', '100%'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              />
+            </motion.div>
 
             <motion.p
               variants={fadeInUp}
-              className="text-base md:text-lg font-semibold text-[#0a1628]"
+              className="text-base md:text-lg font-medium text-[#1A1A1A]/80"
             >
-              Empowering Tomorrow's Leaders
+              <motion.span
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 3, repeat: Infinity }}
+              >
+                Tomorrow
+              </motion.span>
+              <br />
+              The conversation starts.
             </motion.p>
           </motion.div>
         </motion.section>
@@ -170,40 +314,79 @@ export default function Page() {
           initial="initial"
           whileInView="animate"
           viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8"
+          className="flex justify-center relative"
         >
-          <ModeCard
-            title="Interview Practice"
-            description="Simulate high-stakes job interviews with critical HR directors."
-            icon={<Briefcase size={32} />}
-            onClick={() => setSelectedMode('Interview')}
+          {/* Background glow effect */}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/10 to-[#00A86B]/10 rounded-3xl blur-3xl -z-10"
+            animate={{
+              scale: [1, 1.05, 1],
+              opacity: [0.3, 0.5, 0.3],
+            }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
           />
           <ModeCard
-            title="Sales Trainer"
-            description="Practice handling objections and closing deals with skeptical clients."
+            title="AI Consultant"
+            description="Get expert guidance on business strategy, problem-solving, and professional development through interactive AI conversations."
             icon={<TrendingUp size={32} />}
-            onClick={() => setSelectedMode('Sales')}
-          />
-          <ModeCard
-            title="IELTS Prep"
-            description="Sharpen your speaking skills for all parts of the IELTS exam."
-            icon={<GraduationCap size={32} />}
-            onClick={() => setSelectedMode('IELTS')}
+            onClick={() => setSelectedMode('Consultant')}
           />
         </motion.div>
 
-        {/* Stats/Info Section */}
+        {/* Feature highlights */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6"
+        >
+          {[
+            { icon: Sparkles, label: "AI-Powered", desc: "Smart conversations" },
+            { icon: Zap, label: "Real-Time", desc: "Instant feedback" },
+            { icon: Target, label: "Goal Oriented", desc: "Track your progress" }
+          ].map((feature, index) => (
+            <motion.div
+              key={index}
+              className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/50"
+              whileHover={{ y: -5, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            >
+              <motion.div
+                className="w-12 h-12 bg-gradient-to-br from-[#0078D7]/10 to-[#00A86B]/10 rounded-xl flex items-center justify-center mx-auto mb-3"
+                animate={{
+                  rotate: [0, 5, -5, 0],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  delay: index * 0.2,
+                }}
+              >
+                <feature.icon className="text-[#0078D7]" size={24} />
+              </motion.div>
+              <h4 className="font-bold text-[#1A1A1A] mb-1">{feature.label}</h4>
+              <p className="text-sm text-[#1A1A1A]/60">{feature.desc}</p>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* Stats/Info Section
         <section className="mt-24 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <h3 className="text-3xl font-bold text-[#0a1628]">Why THE DIALOGUE?</h3>
+            <h3 className="text-3xl font-bold text-[#1A1A1A]">Why THE DIALOGUE?</h3>
             <p className="text-gray-600 leading-relaxed">
               Developed in collaboration with industry experts, our AI simulator provides real-time feedback,
               challenging scenarios, and professional coaching to help you excel in any speaking environment.
             </p>
             <ul className="space-y-4">
               {['Real-time AI Feedback', 'Industry-Specific Scenarios', '5-Turn High-Intensity Drills'].map((item) => (
-                <li key={item} className="flex items-center gap-3 font-bold text-[#0a1628]">
-                  <div className="bg-[#1e3a5f] p-1 rounded-full text-[#0a1628]">
+                <li key={item} className="flex items-center gap-3 font-bold text-[#1A1A1A]">
+                  <div className="bg-[#0078D7] p-1 rounded-full text-white">
                     <MessageSquare size={16} />
                   </div>
                   {item}
@@ -212,19 +395,19 @@ export default function Page() {
             </ul>
           </div>
           <div className="relative">
-            <div className="aspect-video bg-[#0a1628] rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center p-12">
+            <div className="aspect-video bg-gradient-to-br from-[#0078D7] to-[#00A86B] rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center p-12">
               <div className="text-center space-y-4">
-                <div className="text-[#1e3a5f] text-6xl font-black">98%</div>
+                <div className="text-white text-6xl font-black">98%</div>
                 <div className="text-white font-bold uppercase tracking-widest">User Confidence Boost</div>
               </div>
             </div>
-            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-gradient-to-br from-[#1e3a5f] to-[#0a1628] rounded-2xl -z-10 opacity-50" />
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-gradient-to-br from-[#0078D7] to-[#00A86B] rounded-2xl -z-10 opacity-50" />
           </div>
-        </section>
+        </section> */}
       </main>
 
       {/* Footer */}
-      <footer className="bg-[#0a1628] text-white py-12 px-6 mt-24">
+      {/* <footer className="bg-gradient-to-r from-[#1A1A1A] to-[#0078D7] text-white py-12 px-6 mt-24">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
             <h4 className="text-2xl font-black mb-2 tracking-tighter">THE DIALOGUE</h4>
@@ -235,7 +418,7 @@ export default function Page() {
               <motion.a
                 key={link}
                 href="#"
-                className="hover:text-[#1e3a5f] transition-colors relative"
+                className="hover:text-[#00A86B] transition-colors relative"
                 whileHover={{ y: -2 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
               >
@@ -244,7 +427,7 @@ export default function Page() {
             ))}
           </div>
         </div>
-      </footer>
+      </footer> */}
     </div>
   );
 }
@@ -257,31 +440,126 @@ function ModeCard({ title, description, icon, onClick }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-      whileHover={{ y: -6 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+      whileHover={{
+        y: -12,
+        scale: 1.02,
+        transition: { type: "spring", stiffness: 300, damping: 20 }
+      }}
+      whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 cursor-pointer hover:shadow-2xl transition-all group"
+      className="relative bg-white p-8 rounded-3xl shadow-xl border border-white/50 cursor-pointer overflow-hidden group"
     >
-      <div className="w-16 h-16 bg-[#F8F9FA] rounded-2xl flex items-center justify-center text-[#0a1628] mb-6 group-hover:bg-[#0a1628] group-hover:text-[#1e3a5f] transition-all duration-300">
-        {icon}
-      </div>
-      <h3 className="text-2xl font-bold text-[#0a1628] mb-3">{title}</h3>
-      <p className="text-gray-500 mb-6 font-medium leading-relaxed">
-        {description}
-      </p>
-      <div className="flex items-center gap-2 font-bold text-[#0a1628] uppercase tracking-widest text-sm">
-        Start Training
-        <motion.span
-          animate={{ x: [0, 8, 0] }}
-          transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+      {/* Animated gradient overlay on hover */}
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-br from-[#0078D7]/5 to-[#00A86B]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+      />
+
+      {/* Shimmer effect */}
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent skew-x-12 opacity-0 group-hover:opacity-100"
+        animate={{ x: ['-100%', '200%'] }}
+        transition={{ duration: 1.5, ease: "easeInOut" }}
+      />
+
+      {/* Corner accent decorations */}
+      <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-[#0078D7]/20 rounded-tl-3xl group-hover:border-[#0078D7] transition-colors duration-300" />
+      <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-[#00A86B]/20 rounded-br-3xl group-hover:border-[#00A86B] transition-colors duration-300" />
+
+      {/* Icon with enhanced animations */}
+      <motion.div
+        className="w-20 h-20 bg-gradient-to-br from-[#F8F9FA] to-[#E0E0E0] rounded-2xl flex items-center justify-center text-[#1A1A1A] mb-6 relative z-10 group-hover:bg-gradient-to-br group-hover:from-[#0078D7] group-hover:to-[#00A86B] group-hover:text-white transition-all duration-500"
+        whileHover={{ rotate: 360 }}
+        transition={{ duration: 0.6, type: "spring" }}
+      >
+        <motion.div
+          animate={{ rotate: [0, 360] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
         >
-          →
-        </motion.span>
+          {icon}
+        </motion.div>
+        {/* Sparkle effect on hover */}
+        <motion.div
+          className="absolute inset-0 rounded-2xl"
+          initial={{ opacity: 0 }}
+          whileHover={{ opacity: 1 }}
+        >
+          {[...Array(3)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 bg-white rounded-full"
+              initial={{ scale: 0, opacity: 0 }}
+              whileHover={{
+                scale: [0, 1, 0],
+                opacity: [0, 1, 0],
+              }}
+              transition={{
+                duration: 0.6,
+                repeat: Infinity,
+                delay: i * 0.2,
+              }}
+              style={{
+                top: `${20 + i * 30}%`,
+                left: `${20 + i * 30}%`,
+              }}
+            />
+          ))}
+        </motion.div>
+      </motion.div>
+
+      {/* Content */}
+      <div className="relative z-10">
+        <motion.h3
+          className="text-3xl font-bold text-[#1A1A1A] mb-3 group-hover:text-[#0078D7] transition-colors duration-300"
+          whileHover={{ x: 5 }}
+        >
+          {title}
+        </motion.h3>
+        <motion.p
+          className="text-[#1A1A1A]/60 mb-6 font-medium leading-relaxed"
+          whileHover={{ x: 5 }}
+          transition={{ delay: 0.05 }}
+        >
+          {description}
+        </motion.p>
+
+        {/* CTA with enhanced animation */}
+        <motion.div
+          className="flex items-center gap-2 font-semibold text-[#0078D7] uppercase tracking-wide text-sm group-hover:text-[#00A86B] transition-colors duration-300"
+          whileHover={{ x: 5 }}
+          transition={{ delay: 0.1 }}
+        >
+          <span>Start Training</span>
+          <motion.span
+            animate={{ x: [0, 8, 0] }}
+            transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+            className="group-hover:text-[#00A86B]"
+          >
+            →
+          </motion.span>
+        </motion.div>
       </div>
+
+      {/* Floating particles */}
+      <motion.div
+        className="absolute top-4 right-4 w-2 h-2 bg-[#0078D7]/30 rounded-full"
+        animate={{
+          y: [0, -10, 0],
+          opacity: [0.3, 0.6, 0.3],
+        }}
+        transition={{ duration: 3, repeat: Infinity }}
+      />
+      <motion.div
+        className="absolute bottom-4 left-4 w-1.5 h-1.5 bg-[#00A86B]/30 rounded-full"
+        animate={{
+          y: [0, 10, 0],
+          opacity: [0.3, 0.6, 0.3],
+        }}
+        transition={{ duration: 4, repeat: Infinity, delay: 1 }}
+      />
     </motion.div>
   );
 }
