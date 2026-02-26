@@ -211,16 +211,15 @@ export function useGeminiLive() {
 
   /** Stop audio playback */
   const stopAudioPlayback = useCallback(() => {
-    // Stop current source
-    if (currentSourceRef.current) {
-      try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
-      currentSourceRef.current = null;
+    // Stop all active sources
+    for (const source of activeSourcesRef.current) {
+      try { source.stop(); } catch { /* already stopped */ }
     }
-    // Clear audio queue
-    audioQueueRef.current = [];
+    activeSourcesRef.current = [];
+    nextStartTimeRef.current = 0;
     isPlayingRef.current = false;
     setIsPlaying(false);
-    console.log('[GeminiLive] Audio playback stopped, queue cleared');
+    console.log('[GeminiLive] Audio playback stopped, sources cleared');
   }, []);
 
   const connect = useCallback(async (config: GeminiLiveConfig) => {
@@ -339,16 +338,13 @@ export function useGeminiLive() {
               if (turnTextRef.current.includes('[FINISH]') && isPlayingRef.current) {
                 console.log('[GeminiLive] [FINISH] detected, stopping audio playback');
                 console.log('[GeminiLive] Full text so far:', turnTextRef.current.substring(0, 200));
-                // Stop only the audio playback, but don't clear the queue yet
-                // This allows transcription to continue accumulating
-                if (currentSourceRef.current) {
-                  try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
-                  currentSourceRef.current = null;
+                // Stop all active audio sources
+                for (const source of activeSourcesRef.current) {
+                  try { source.stop(); } catch { /* already stopped */ }
                 }
+                activeSourcesRef.current = [];
                 isPlayingRef.current = false;
                 setIsPlaying(false);
-                // Clear any remaining audio chunks in queue so they don't play
-                audioQueueRef.current = [];
                 console.log('[GeminiLive] Audio stopped, transcription continues');
               }
             }
@@ -364,7 +360,7 @@ export function useGeminiLive() {
 
               // Wait a moment for any remaining transcription after [FINISH], then signal turn complete
               const checkAudioDone = () => {
-                if (!isPlayingRef.current && audioQueueRef.current.length === 0) {
+                if (!isPlayingRef.current && activeSourcesRef.current.length === 0) {
                   // Give a small delay to allow final transcription chunks to arrive
                   setTimeout(() => {
                     // Capture the final accumulated text
