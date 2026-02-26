@@ -94,7 +94,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     });
 
     // Connect to Gemini Live
-    await geminiConnect({
+    const success = await geminiConnect({
       language: options.language,
       mode: mode || '',
       area: options.consultingArea,
@@ -102,6 +102,12 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       industry: options.industry,
       ieltsPart: options.ieltsPart,
     });
+
+    if (!success) {
+      // Connection failed — revert to setup so user can retry
+      setStep('setup');
+      setStatus('idle');
+    }
   };
 
   // Handle Gemini Live connection established

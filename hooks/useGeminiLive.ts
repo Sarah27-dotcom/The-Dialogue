@@ -164,7 +164,8 @@ export function useGeminiLive() {
       const { apiKey, error: keyError } = await keyResp.json();
       if (keyError || !apiKey) {
         setError(keyError || 'Failed to get API key');
-        return;
+        setConnected(false);
+        return false;
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -268,10 +269,12 @@ export function useGeminiLive() {
 
       sessionRef.current = session;
       console.log('[GeminiLive] Session connected successfully');
+      return true;
     } catch (err: any) {
       console.error('[GeminiLive] Connection failed:', err);
       setError(err?.message || 'Failed to connect to Gemini Live');
       setConnected(false);
+      return false;
     }
   }, [initAudioContext, enqueueAudio]);
 
@@ -346,7 +349,11 @@ export function useGeminiLive() {
       };
 
       source.connect(processor);
-      processor.connect(audioCtx.destination);
+      // Connect to a muted gain node instead of destination to prevent mic echo
+      const muteNode = audioCtx.createGain();
+      muteNode.gain.value = 0;
+      processor.connect(muteNode);
+      muteNode.connect(audioCtx.destination);
 
       // Store references for cleanup
       mediaRecorderRef.current = { audioCtx, source, processor } as any;
