@@ -76,7 +76,11 @@ export function useSpeech() {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
           voicesCacheRef.current = voices;
+          selectedVoiceRef.current.clear(); // Clear cache when voices reload
           setVoicesLoaded(true);
+
+          // Debug: log all available voices
+          console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`));
         }
       };
 
@@ -131,6 +135,39 @@ export function useSpeech() {
     }
   }, []);
 
+  // Helper function to determine voice gender based on name patterns
+  const getVoiceGender = useCallback((voiceName: string): 'male' | 'female' | 'unknown' => {
+    const nameLower = voiceName.toLowerCase();
+
+    // Male keywords including Indonesian-specific patterns
+    const maleKeywords = [
+      'male', 'david', 'john', 'mark', 'daniel', 'guy', 'adam', 'james',
+      'google indonesia', 'google bahasa', 'bahasa indonesia', 'indonesia'
+    ];
+
+    // Female keywords
+    const femaleKeywords = [
+      'female', 'zira', 'heera', 'rishi', 'veena', 'google india', 'microsoft heera',
+      'julia', 'samantha', 'karen', 'moira', 'tessa', 'fiona', 'google uk english female'
+    ];
+
+    // Check for male indicators
+    for (const keyword of maleKeywords) {
+      if (nameLower.includes(keyword)) {
+        return 'male';
+      }
+    }
+
+    // Check for female indicators
+    for (const keyword of femaleKeywords) {
+      if (nameLower.includes(keyword)) {
+        return 'female';
+      }
+    }
+
+    return 'unknown';
+  }, []);
+
   const speak = useCallback((text: string, language: string = 'English', onEnd?: () => void) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       // Cancel any ongoing speech
@@ -154,23 +191,40 @@ export function useSpeech() {
       // Select voice based on language
       const langCode = language === 'Indonesian' ? 'id-ID' : 'en-US';
 
-      // Use cached voice if available, otherwise find from cache
+      // Use cached voice if available, otherwise find from cache with gender preference
       if (selectedVoiceRef.current.has(langCode)) {
         utterance.voice = selectedVoiceRef.current.get(langCode) || null;
         utterance.lang = langCode;
       } else {
-        // Find and cache voice for this language
-        const preferredVoice = voicesCacheRef.current.find(v => v.lang.includes(langCode));
-        if (preferredVoice) {
-          selectedVoiceRef.current.set(langCode, preferredVoice);
-          utterance.voice = preferredVoice;
+        // For Indonesian, prefer male voice; for English, prefer female voice
+        const preferredGender = language === 'Indonesian' ? 'male' : 'female';
+
+        // Find a voice with the preferred gender
+        let selectedVoice = voicesCacheRef.current.find(v => {
+          if (!v.lang.includes(langCode)) return false;
+          const gender = getVoiceGender(v.name);
+          console.log(`Checking voice: ${v.name} - Gender: ${gender}`);
+          return gender === preferredGender;
+        });
+
+        console.log(`Selected voice for ${langCode}: ${selectedVoice?.name || 'none'}`);
+
+        // Fallback to any voice for the language if no gender-specific voice found
+        if (!selectedVoice) {
+          selectedVoice = voicesCacheRef.current.find(v => v.lang.includes(langCode));
+          console.log(`Fallback voice for ${langCode}: ${selectedVoice?.name || 'none'}`);
+        }
+
+        if (selectedVoice) {
+          selectedVoiceRef.current.set(langCode, selectedVoice);
+          utterance.voice = selectedVoice;
           utterance.lang = langCode;
         }
       }
 
       window.speechSynthesis.speak(utterance);
     }
-  }, []);
+  }, [getVoiceGender]);
 
   const cancelSpeech = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
