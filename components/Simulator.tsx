@@ -157,6 +157,24 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     }
   }, [isListening, transcript, status, processUserMessage]);
 
+  // Auto-start listening when AI stops speaking
+  useEffect(() => {
+    if (!isSpeaking && status === 'idle' && step === 'active') {
+      // AI stopped speaking, auto-start listening
+      transcriptProcessed.current = false;
+      setStatus('listening');
+      startListening(options.language);
+    }
+  }, [isSpeaking, status, step, startListening, options.language]);
+
+  // Stop listening when AI starts speaking
+  useEffect(() => {
+    if (isSpeaking && isListening) {
+      stopListening();
+      setStatus('idle');
+    }
+  }, [isSpeaking, isListening, stopListening]);
+
   const resetSession = () => {
     cancelSpeech();
     setStep('setup');
@@ -512,7 +530,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                     turnCount === 0 ? (
                       'Connecting...'
                     ) : turnCount < 5 ? (
-                      `Information Gathering • Turn ${turnCount}/5`
+                      `Turn ${turnCount}/5`
                     ) : (
                       'Solution Delivery'
                     )
@@ -523,7 +541,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
 
                 <motion.button
                   onClick={handlePushToTalk}
-                  disabled={status === 'processing' || status === 'speaking'}
+                  disabled={isSpeaking || status === 'processing'}
                   whileHover={{ scale: status === 'listening' ? 1 : 1.05 }}
                   whileTap={{ scale: status === 'listening' ? 1 : 0.95 }}
                   className={`
@@ -531,11 +549,11 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                     ${status === 'listening'
                       ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-xl shadow-red-500/30'
                       : 'bg-gradient-to-br from-[#0078D7] to-[#00A86B] shadow-xl shadow-[#0078D7]/30'}
-                    ${(status === 'processing' || status === 'speaking') ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${(isSpeaking || status === 'processing') ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
                   {/* Pulsing ring */}
-                  {status !== 'listening' && (status !== 'processing' && status !== 'speaking') && (
+                  {status !== 'listening' && !isSpeaking && status !== 'processing' && (
                     <motion.div
                       className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B]"
                       animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
