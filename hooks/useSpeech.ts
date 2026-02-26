@@ -72,6 +72,8 @@ export function useSpeech() {
   // Load voices asynchronously to ensure consistent voice selection
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
       const loadVoices = () => {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
@@ -80,8 +82,32 @@ export function useSpeech() {
         }
       };
 
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+      if (isIOS) {
+        // iOS-specific: Use polling since onvoiceschanged is unreliable
+        const pollVoices = setInterval(() => {
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            voicesCacheRef.current = voices;
+            setVoicesLoaded(true);
+            clearInterval(pollVoices);
+            console.log('[iOS TTS] Voices loaded via polling:', voices.length);
+          }
+        }, 100);
+
+        // Stop polling after 5 seconds and use whatever voices are available
+        setTimeout(() => {
+          clearInterval(pollVoices);
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0 && !voicesLoaded) {
+            voicesCacheRef.current = voices;
+            setVoicesLoaded(true);
+            console.log('[iOS TTS] Voices loaded via timeout:', voices.length);
+          }
+        }, 5000);
+      } else {
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
     }
   }, []);
 
@@ -101,6 +127,20 @@ export function useSpeech() {
   };
 
   const startListening = useCallback((language: string = 'English') => {
+    // iOS Audio Priming: Keep Security Window open for async speech
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+      if (isIOS) {
+        // PRIME: Play empty utterance to maintain audio permission
+        // Without this, speak() called later (after API) will be blocked
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        window.speechSynthesis.speak(silentUtterance);
+        console.log('[iOS TTS] Audio primed with silent utterance');
+      }
+    }
+
     if (recognitionRef.current) {
       // Clear any existing silence timeout
       if (silenceTimeoutRef.current) {
@@ -146,10 +186,18 @@ export function useSpeech() {
     }
   }, []);
 
-  const speak = useCallback((text: string, language: string = 'English', onEnd?: () => void) => {
+  const speak = useCallback(async (text: string, language: string = 'English', onEnd?: () => void) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+      // iOS fix: Ensure speech synthesis is ready
+      if (isIOS) {
+        window.speechSynthesis.cancel();
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } else {
+        // Cancel any ongoing speech for non-iOS
+        window.speechSynthesis.cancel();
+      }
 
       // Clean text from tags for cleaner speech
       // Remove [WAVE:ON] tag and everything from [FINISH] onwards (including newlines)
@@ -191,6 +239,13 @@ export function useSpeech() {
           console.log(`Fallback voice for ${langCode}: ${selectedVoice?.name || 'none'}`);
         }
 
+        // iOS fallback: If voice selection fails, use the first available voice matching language
+        if (isIOS && !selectedVoice && voicesCacheRef.current.length > 0) {
+          const baseLang = langCode.split('-')[0];
+          selectedVoice = voicesCacheRef.current.find(v => v.lang.startsWith(baseLang));
+          console.log(`[iOS TTS] Using base language fallback: ${selectedVoice?.name || 'none'}`);
+        }
+
         if (selectedVoice) {
           selectedVoiceRef.current.set(langCode, selectedVoice);
           utterance.voice = selectedVoice;
@@ -198,7 +253,24 @@ export function useSpeech() {
         }
       }
 
+      // iOS debug logging
+      if (isIOS) {
+        console.log('[iOS TTS] Speaking:', cleanText.substring(0, 50));
+        console.log('[iOS TTS] Available voices:', voicesCacheRef.current.length);
+        console.log('[iOS TTS] Selected voice:', utterance.voice?.name || 'default');
+      }
+
       window.speechSynthesis.speak(utterance);
+
+      // iOS fix: Resume if paused (iOS sometimes auto-pauses)
+      if (isIOS) {
+        setTimeout(() => {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+            console.log('[iOS TTS] Resumed paused speech');
+          }
+        }, 100);
+      }
     }
   }, []);
 
