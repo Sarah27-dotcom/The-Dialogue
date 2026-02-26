@@ -59,6 +59,22 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   })), []);
 
   const startSession = async () => {
+    // iOS Safari requires a user gesture to "unlock" speech synthesis.
+    // Prime it *before* any async work (network requests), otherwise audio can be silently blocked.
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIOS) {
+        try {
+          window.speechSynthesis.cancel();
+          const silent = new SpeechSynthesisUtterance('');
+          silent.volume = 0;
+          window.speechSynthesis.speak(silent);
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
     setStep('active');
     setStatus('processing');
     setTurnCount(1);
@@ -160,10 +176,13 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   // Auto-start listening when AI stops speaking
   useEffect(() => {
     if (!isSpeaking && status === 'idle' && step === 'active') {
-      // AI stopped speaking, auto-start listening
+      // AI stopped speaking, auto-start listening.
+      // Defer state updates to avoid setState synchronously inside effects (iOS Safari is also touchy here).
       transcriptProcessed.current = false;
-      setStatus('listening');
-      startListening(options.language);
+      setTimeout(() => {
+        setStatus('listening');
+        startListening(options.language);
+      }, 0);
     }
   }, [isSpeaking, status, step, startListening, options.language]);
 
@@ -171,7 +190,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   useEffect(() => {
     if (isSpeaking && isListening) {
       stopListening();
-      setStatus('idle');
+      setTimeout(() => setStatus('idle'), 0);
     }
   }, [isSpeaking, isListening, stopListening]);
 

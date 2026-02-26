@@ -36,6 +36,57 @@ export function useGeminiLive() {
     return `${protocol}//${host}/api/gemini-live`;
   }, []);
 
+  const playAudioQueue = useCallback(async function playAudioQueueImpl() {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      return;
+    }
+
+    isPlayingRef.current = true;
+    setIsPlaying(true);
+
+    const base64Data = audioQueueRef.current.shift()!;
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      }
+
+      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
+
+      // Stop any currently playing source
+      if (currentSourceRef.current) {
+        try {
+          currentSourceRef.current.stop();
+        } catch (e) {
+          // Already stopped
+        }
+      }
+
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      currentSourceRef.current = source;
+
+      source.onended = () => {
+        currentSourceRef.current = null;
+        void playAudioQueueImpl();
+      };
+
+      source.start();
+    } catch (err) {
+      console.error('Error playing audio:', err);
+      // Skip this chunk and try the next one
+      void playAudioQueueImpl();
+    }
+  }, []);
+
   const connect = useCallback(async (config: GeminiLiveConfig) => {
     setError(null);
 
@@ -120,63 +171,11 @@ export function useGeminiLive() {
         setError('WebSocket connection error');
         setConnected(false);
       };
-
     } catch (err: any) {
       setError(err?.message || 'Failed to connect');
       setConnected(false);
     }
-  }, [getWebSocketUrl, aiText]);
-
-  const playAudioQueue = useCallback(async () => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsPlaying(false);
-      return;
-    }
-
-    isPlayingRef.current = true;
-    setIsPlaying(true);
-
-    const base64Data = audioQueueRef.current.shift()!;
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-      }
-
-      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
-
-      // Stop any currently playing source
-      if (currentSourceRef.current) {
-        try {
-          currentSourceRef.current.stop();
-        } catch (e) {
-          // Already stopped
-        }
-      }
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      currentSourceRef.current = source;
-
-      source.onended = () => {
-        currentSourceRef.current = null;
-        playAudioQueue();
-      };
-
-      source.start();
-    } catch (err) {
-      console.error('Error playing audio:', err);
-      // Skip this chunk and try the next one
-      playAudioQueue();
-    }
-  }, []);
+  }, [getWebSocketUrl, aiText, playAudioQueue]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -272,7 +271,7 @@ export function useGeminiLive() {
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
       mediaRecorderRef.current = null;
     }
     setIsRecording(false);
@@ -280,10 +279,12 @@ export function useGeminiLive() {
 
   const sendText = useCallback((text: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'text',
-        text
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'text',
+          text
+        })
+      );
     }
   }, []);
 
