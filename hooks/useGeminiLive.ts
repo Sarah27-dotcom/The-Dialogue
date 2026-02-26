@@ -122,8 +122,8 @@ interface GeminiLiveConfig {
 export function useGeminiLive() {
   const sessionRef = useRef<Session | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const nextStartTimeRef = useRef(0);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const isPlayingRef = useRef(false);
   const mimeTypeRef = useRef<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -142,7 +142,7 @@ export function useGeminiLive() {
   const turnTextRef = useRef('');
   const turnCountRef = useRef(0);
 
-  /** Convert base64 PCM to a playable AudioBuffer and enqueue */
+  /** Decode base64 PCM chunk and schedule it gaplessly on the AudioContext clock */
   const enqueueAudio = useCallback((base64Data: string, mime: string) => {
     mimeTypeRef.current = mime;
     const binaryString = atob(base64Data);
@@ -150,65 +150,51 @@ export function useGeminiLive() {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    audioQueueRef.current.push(bytes.buffer);
-
-    if (!isPlayingRef.current) {
-      playNextChunk();
-    }
-  }, []);
-
-  /** Play audio chunks sequentially via Web Audio API */
-  const playNextChunk = useCallback(async function playNextChunkImpl() {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsPlaying(false);
-      return;
-    }
-
-    isPlayingRef.current = true;
-    setIsPlaying(true);
-
-    const rawBuffer = audioQueueRef.current.shift()!;
 
     try {
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       }
+      const ctx = audioContextRef.current;
       // iOS: resume if suspended
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
       }
 
       // Parse the raw PCM data (16-bit signed LE, mono, 24kHz)
-      const pcmData = new Int16Array(rawBuffer);
+      const pcmData = new Int16Array(bytes.buffer);
       const float32 = new Float32Array(pcmData.length);
       for (let i = 0; i < pcmData.length; i++) {
         float32[i] = pcmData[i] / 32768;
       }
 
-      const audioBuffer = audioContextRef.current.createBuffer(1, float32.length, 24000);
+      const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
       audioBuffer.getChannelData(0).set(float32);
 
-      // Stop any currently playing source
-      if (currentSourceRef.current) {
-        try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
-      }
-
-      const source = audioContextRef.current.createBufferSource();
+      const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      currentSourceRef.current = source;
+      source.connect(ctx.destination);
+
+      // Schedule each chunk to start exactly when the previous one ends — no gaps, no clicks
+      const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
+      nextStartTimeRef.current = startTime + audioBuffer.duration;
+
+      activeSourcesRef.current.push(source);
+      isPlayingRef.current = true;
+      setIsPlaying(true);
 
       source.onended = () => {
-        currentSourceRef.current = null;
-        void playNextChunkImpl();
+        activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source);
+        // Only mark done when all scheduled audio has finished playing
+        if (ctx.currentTime >= nextStartTimeRef.current - 0.05) {
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        }
       };
 
-      source.start();
+      source.start(startTime);
     } catch (err) {
-      console.error('[GeminiLive] Error playing audio chunk:', err);
-      // Skip this chunk and try the next
-      void playNextChunkImpl();
+      console.error('[GeminiLive] Error scheduling audio chunk:', err);
     }
   }, []);
 
@@ -283,7 +269,8 @@ export function useGeminiLive() {
       // Reset state
       turnTextRef.current = '';
       turnCountRef.current = 0;
-      audioQueueRef.current = [];
+      nextStartTimeRef.current = 0;
+      activeSourcesRef.current = [];
 
       // Build config with optional voice setting
       const sessionConfig: any = {
@@ -499,10 +486,16 @@ export function useGeminiLive() {
       };
 
       source.connect(processor);
-      processor.connect(audioCtx.destination);
+      // ScriptProcessorNode needs a destination connection to fire onaudioprocess,
+      // but routing directly to destination plays mic audio through speakers.
+      // Fix: route through a muted GainNode so mic audio is never audible.
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+      processor.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
 
       // Store references for cleanup
-      mediaRecorderRef.current = { audioCtx, source, processor } as any;
+      mediaRecorderRef.current = { audioCtx, source, processor, silentGain } as any;
       setIsRecording(true);
       console.log('[GeminiLive] Recording started');
     } catch (err: any) {
@@ -518,6 +511,7 @@ export function useGeminiLive() {
       try {
         refs.processor?.disconnect();
         refs.source?.disconnect();
+        refs.silentGain?.disconnect();
         refs.audioCtx?.close();
       } catch { /* ignore */ }
       mediaRecorderRef.current = null;
