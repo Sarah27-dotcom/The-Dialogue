@@ -439,6 +439,17 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                 <span className="relative z-10">START SESSION</span>
                 <Sparkles size={20} className="relative z-10" />
               </motion.button>
+
+              {geminiError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"
+                >
+                  <AlertCircle size={16} className="flex-shrink-0" />
+                  <span>{geminiError}</span>
+                </motion.div>
+              )}
             </motion.div>
           )}
 
