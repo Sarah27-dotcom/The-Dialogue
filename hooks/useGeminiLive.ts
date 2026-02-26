@@ -14,9 +14,10 @@ CORE MODES:
 1. INTERVIEW COACH: Act as a high-level HR Director. Tone: Critical, professional, and challenging.
 2. AI CONSULTANT: Act as a professional business consultant helping users solve business problems.
    - Tone: Helpful, inquisitive, analytical, solution-oriented.
-   - Turn 1: Greet warmly and ask user to describe their business problem.
-   - Turns 2-4: Ask focused clarifying questions to understand context, constraints, stakeholders.
-   - Turn 5: Provide TWO outputs:
+   - Turn 1: Greet warmly and ask 1 focused question about their business problem.
+   - Turn 2: Ask 1 clarifying question to understand context or constraints.
+   - Turn 3: Ask 1 final question about stakeholders or desired outcomes.
+   - Turn 4: Provide TWO outputs:
      1) First, give a brief solution summary (under 40 words) that will be spoken
      2) Then add [FINISH] followed by a detailed, comprehensive solution with 3-5 concrete, actionable steps
 3. PRESENTATION WARM-UP (The 5-Turn Drill): Act as a supportive Mentor.
@@ -25,14 +26,89 @@ CORE MODES:
    - Turn 5: Final high-energy pep talk.
 
 CONSTRAINTS:
-- TURN LIMIT: Exactly 5 turns per session.
-- VOICE OPTIMIZATION: Your first response in Turn 5 MUST be under 40 words (for speaking).
+- TURN LIMIT: Exactly 4 turns per session.
+- VOICE OPTIMIZATION: Your first response in Turn 4 MUST be under 40 words (for speaking).
 - NO FORMATTING: Do NOT use bold (**), italics, bullet points, or emojis.
 - NO INTERNAL MONOLOGUE: NEVER output your thinking, planning, or internal state. ONLY speak directly to the user.
+- NO CLOSING MESSAGES: NEVER say phrases like "Sesi ini telah selesai", "Thank you for using", "Terima kasih", or any session closing greetings. End directly with your solution.
 - TAGGING SYSTEM:
   - ALWAYS start every response with the tag [WAVE:ON].
-  - On the 5th response, provide a brief summary, then add [FINISH] followed by your detailed solution.
+  - On the 4th response, provide a brief summary, then add [FINISH] followed by your detailed solution.
 - LANGUAGE: Adapt to the user's language (Indonesian or English). Maintain a professional, academic, yet agile business tone.`;
+
+const MARKETING_ANALYTICS_CURRICULUM = `
+MARKETING ANALYTICS CURRICULUM - Use this as your knowledge base when providing solutions:
+
+MODULE 1: Marketing Analytics Background & Metrics
+- Role of analytics as competitive advantage
+- Marketing analytics framework & maturity model
+- Funnel metrics vs outcome metrics
+- Customer Acquisition Cost (CAC) and Customer Lifetime Value (LTV)
+- Contribution margin analysis
+
+MODULE 2: Customer Analytics & Segmentation
+- Behavioral vs demographic segmentation
+- RFM (Recency, Frequency, Monetary) framework
+- Cohort analysis
+- Retention, churn, and customer lifetime value
+- Activity: Read cohort table, identify high-value and at-risk segments
+
+MODULE 3: Campaign & Channel Analytics
+- Channel performance frameworks
+- Attribution channel models (first-touch, last-touch, multi-touch)
+- Paid vs organic trade-offs
+
+MODULE 4: Experimentation & Test-and-Learn
+- A/B testing methodology
+- Hypothesis-driven marketing
+- Activity: Design experiment for acquisition, define success criteria and risks
+
+MODULE 5: Predictive Analytics
+- Predictive use cases: churn prediction, response modeling, upsell/cross-sell
+- Propensity scoring
+- Activity: Identify predictive use cases in organization
+
+MODULE 6: AI Foundations for Marketers
+- Brief history of AI & evolution in marketing
+- AI tool landscape for marketers
+- AI model landscape selection
+- Pattern recognition vs labeled data learning
+
+MODULE 7: Prompting & Communicating with AI
+- Text prompting fundamentals: structure, context & iteration
+- Concepting & creative ideation for campaigns
+- Marketing strategy & positioning with AI
+- Activity: Craft prompts for brand or campaign
+
+MODULE 8: Text to Image
+- How text-to-image models work
+- Moodboard creation: style, tone, color & composition
+- Storyboarding: translating concepts to visual scenes
+- Scene-by-scene prompting for consistency
+- Activity: Generate moodboard & storyboard
+
+MODULE 9: Image to Video
+- How image-to-video animation models work
+- Camera motion, transitions & timing
+- Visual consistency across frames
+- Activity: Animate storyboard into video clips
+
+MODULE 10: Marketing Budget Optimization
+- Marketing Budget strategic objectives
+- Classify Marketing Spend into Buckets
+- Budget Prioritization: Unit Economics & Marginal ROI
+
+MODULE 11: Future Trends
+- Next-best-action and next-best-offer concepts
+- Real-time vs rule-based personalization
+- Generative AI in marketing insights and content
+
+CAPSTONE: Build Marketing Analytics Playbook
+- Top 3 decisions to improve with analytics
+- Key metrics & experiments
+
+IMPORTANT: When providing solutions for Marketing & Growth, reference relevant concepts from this curriculum. Ensure your recommendations align with these frameworks and methodologies.
+`;
 
 interface GeminiLiveConfig {
   language: string;
@@ -133,6 +209,20 @@ export function useGeminiLive() {
     console.log('[GeminiLive] AudioContext initialized, state:', audioContextRef.current.state);
   }, []);
 
+  /** Stop audio playback */
+  const stopAudioPlayback = useCallback(() => {
+    // Stop current source
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
+      currentSourceRef.current = null;
+    }
+    // Clear audio queue
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+    console.log('[GeminiLive] Audio playback stopped, queue cleared');
+  }, []);
+
   const connect = useCallback(async (config: GeminiLiveConfig) => {
     setError(null);
 
@@ -161,6 +251,9 @@ export function useGeminiLive() {
       let systemInstruction = SYSTEM_INSTRUCTION;
       if (config.mode === 'Consultant' && config.area) {
         systemInstruction += `\n\nCurrent consulting area: ${config.area}`;
+        if (config.area === 'Marketing & Growth') {
+          systemInstruction += MARKETING_ANALYTICS_CURRICULUM;
+        }
       } else if (config.mode === 'Interview' && config.jobTitle && config.industry) {
         systemInstruction += `\n\nCurrent interview context: ${config.jobTitle} position at ${config.industry} company`;
       } else if (config.mode === 'IELTS' && config.ieltsPart) {
@@ -241,6 +334,23 @@ export function useGeminiLive() {
               turnTextRef.current += text;
               setAiText(turnTextRef.current);
               console.log('[GeminiLive] Transcription:', text.substring(0, 80));
+
+              // Check for [FINISH] tag - stop audio but keep accumulating transcription
+              if (turnTextRef.current.includes('[FINISH]') && isPlayingRef.current) {
+                console.log('[GeminiLive] [FINISH] detected, stopping audio playback');
+                console.log('[GeminiLive] Full text so far:', turnTextRef.current.substring(0, 200));
+                // Stop only the audio playback, but don't clear the queue yet
+                // This allows transcription to continue accumulating
+                if (currentSourceRef.current) {
+                  try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
+                  currentSourceRef.current = null;
+                }
+                isPlayingRef.current = false;
+                setIsPlaying(false);
+                // Clear any remaining audio chunks in queue so they don't play
+                audioQueueRef.current = [];
+                console.log('[GeminiLive] Audio stopped, transcription continues');
+              }
             }
 
             // Handle turn complete
@@ -248,15 +358,22 @@ export function useGeminiLive() {
               turnCountRef.current += 1;
               const currentTurn = turnCountRef.current;
               const currentText = turnTextRef.current;
-              console.log('[GeminiLive] Turn complete:', currentTurn, currentText.substring(0, 80));
+              console.log('[GeminiLive] Turn complete:', currentTurn, 'Text length:', currentText.length, 'Contains [FINISH]:', currentText.includes('[FINISH]'));
+              console.log('[GeminiLive] Text preview:', currentText.substring(0, 200));
               setTurnCount(currentTurn);
 
-              // Wait for audio to finish before signaling turn complete
+              // Wait a moment for any remaining transcription after [FINISH], then signal turn complete
               const checkAudioDone = () => {
-                if (!isPlayingRef.current && activeSourcesRef.current.length === 0) {
-                  onTurnCompleteRef.current?.(currentTurn, currentText);
-                  // Reset accumulated text for next turn
-                  turnTextRef.current = '';
+                if (!isPlayingRef.current && audioQueueRef.current.length === 0) {
+                  // Give a small delay to allow final transcription chunks to arrive
+                  setTimeout(() => {
+                    // Capture the final accumulated text
+                    const finalText = turnTextRef.current;
+                    console.log('[GeminiLive] Final text for callback, length:', finalText.length, 'Contains [FINISH]:', finalText.includes('[FINISH]'));
+                    onTurnCompleteRef.current?.(currentTurn, finalText);
+                    // Reset accumulated text for next turn
+                    turnTextRef.current = '';
+                  }, 500);
                 } else {
                   setTimeout(checkAudioDone, 100);
                 }
@@ -283,7 +400,7 @@ export function useGeminiLive() {
       setError(err?.message || 'Failed to connect to Gemini Live');
       setConnected(false);
     }
-  }, [initAudioContext, enqueueAudio]);
+  }, [initAudioContext, enqueueAudio, stopAudioPlayback]);
 
   /** Send text message to the live session */
   const sendText = useCallback((text: string) => {
@@ -407,18 +524,6 @@ export function useGeminiLive() {
 
     setIsRecording(false);
     console.log('[GeminiLive] Recording stopped');
-  }, []);
-
-  /** Stop audio playback and cancel all scheduled chunks */
-  const stopAudioPlayback = useCallback(() => {
-    activeSourcesRef.current.forEach(source => {
-      try { source.stop(); } catch { /* already stopped */ }
-    });
-    activeSourcesRef.current = [];
-    nextStartTimeRef.current = 0;
-    isPlayingRef.current = false;
-    setIsPlaying(false);
-    console.log('[GeminiLive] Audio playback stopped');
   }, []);
 
   /** Disconnect and cleanup */

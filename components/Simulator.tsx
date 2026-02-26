@@ -124,21 +124,46 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   // Handle turn completion
   useEffect(() => {
     setOnTurnComplete((currentTurn: number, text: string) => {
-      console.log('[Simulator] Turn complete:', currentTurn, text.substring(0, 80));
+      console.log('[Simulator] Turn complete:', currentTurn);
+      console.log('[Simulator] Text length:', text.length);
+      console.log('[Simulator] Contains [FINISH]:', text.includes('[FINISH]'));
+      console.log('[Simulator] Text preview:', text.substring(0, 200));
 
       if (text.includes('[FINISH]')) {
         const finishMatch = text.match(/\[FINISH\]\s*([\s\S]+)$/);
+        console.log('[Simulator] finishMatch:', finishMatch ? 'FOUND' : 'NULL');
+        if (finishMatch) {
+          console.log('[Simulator] Summary length:', finishMatch[1].trim().length);
+          console.log('[Simulator] Summary preview:', finishMatch[1].trim().substring(0, 200));
+        }
         const summaryPart = finishMatch ? finishMatch[1].trim() : null;
         setSummary(summaryPart || 'Session completed.');
+        stopAudio(); // Stop audio playback so detailed solution is not spoken
         setStep('finished');
-      } else if (currentTurn >= 5) {
-        setSummary('Maximum turns reached. Session completed.');
+      } else if (currentTurn >= 4) {
+        console.log('[Simulator] No [FINISH] found on turn 4, using accumulated text');
+        // On turn 4, if no [FINISH] tag, use the full text as the summary
+        // This handles cases where AI didn't include the [FINISH] tag but still provided a solution
+        const cleanedText = text.replace(/\[WAVE:ON\]/g, '').trim();
+        console.log('[Simulator] Cleaned text length:', cleanedText.length);
+        console.log('[Simulator] aiResponse length:', aiResponse.length);
+
+        if (cleanedText && cleanedText.length > 50) {
+          console.log('[Simulator] Using accumulated text as summary');
+          setSummary(cleanedText);
+        } else if (aiResponse && aiResponse.length > 50) {
+          console.log('[Simulator] Using aiResponse as summary');
+          setSummary(aiResponse);
+        } else {
+          console.log('[Simulator] Both texts too short, using default message');
+          setSummary('Maximum turns reached. Session completed.');
+        }
         setStep('finished');
       } else {
         setStatus('idle');
       }
     });
-  }, [setOnTurnComplete]);
+  }, [setOnTurnComplete, stopAudio]);
 
   // Update AI response text from live transcription
   useEffect(() => {
@@ -540,13 +565,13 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                   {mode === 'Consultant' ? (
                     turnCount === 0 ? (
                       'Connecting...'
-                    ) : turnCount < 5 ? (
-                      `Turn ${turnCount}/5`
+                    ) : turnCount < 4 ? (
+                      `Turn ${turnCount}/4`
                     ) : (
                       'Solution Delivery'
                     )
                   ) : (
-                    `TURN ${turnCount} / 5`
+                    `TURN ${turnCount} / 4`
                   )}
                 </motion.div>
 
