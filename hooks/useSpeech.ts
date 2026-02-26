@@ -89,6 +89,17 @@ export function useSpeech() {
     }
   }, []);
 
+  // Helper function to identify voice gender from name patterns
+  const getVoiceGender = (voiceName: string): 'male' | 'female' | 'unknown' => {
+    const name = voiceName.toLowerCase();
+    const maleKeywords = ['male', 'david', 'john', 'mark', 'daniel', 'guy', 'adam', 'james', 'google indonesia'];
+    const femaleKeywords = ['female', 'zira', 'susan', 'karen', 'linda', 'google us english', 'samantha'];
+
+    if (maleKeywords.some(k => name.includes(k))) return 'male';
+    if (femaleKeywords.some(k => name.includes(k))) return 'female';
+    return 'unknown';
+  };
+
   const startListening = useCallback((language: string = 'English') => {
     if (recognitionRef.current) {
       // Clear any existing silence timeout
@@ -196,23 +207,18 @@ export function useSpeech() {
         utterance.voice = selectedVoiceRef.current.get(langCode) || null;
         utterance.lang = langCode;
       } else {
-        // For Indonesian, prefer male voice; for English, prefer female voice
-        const preferredGender = language === 'Indonesian' ? 'male' : 'female';
+        // Find and cache voice for this language with gender preference
+        // Indonesian → Male, English → Female
+        const preferredGender = langCode === 'id-ID' ? 'male' : 'female';
 
-        // Find a voice with the preferred gender
         let selectedVoice = voicesCacheRef.current.find(v => {
           if (!v.lang.includes(langCode)) return false;
-          const gender = getVoiceGender(v.name);
-          console.log(`Checking voice: ${v.name} - Gender: ${gender}`);
-          return gender === preferredGender;
+          return getVoiceGender(v.name) === preferredGender;
         });
 
-        console.log(`Selected voice for ${langCode}: ${selectedVoice?.name || 'none'}`);
-
-        // Fallback to any voice for the language if no gender-specific voice found
+        // Fallback: if no gender-specific voice found, use first available
         if (!selectedVoice) {
           selectedVoice = voicesCacheRef.current.find(v => v.lang.includes(langCode));
-          console.log(`Fallback voice for ${langCode}: ${selectedVoice?.name || 'none'}`);
         }
 
         if (selectedVoice) {
