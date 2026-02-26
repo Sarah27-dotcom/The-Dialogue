@@ -19,8 +19,7 @@ import {
   Home,
   Sparkles
 } from 'lucide-react';
-import { useSpeech } from '@/hooks/useSpeech';
-import { getGeminiResponse } from '@/lib/gemini';
+import { useGeminiLive } from '@/hooks/useGeminiLive';
 import { logUsage } from '@/lib/supabase';
 import { getConsultantAvatar } from '@/lib/avatar';
 
@@ -43,14 +42,28 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     ieltsPart: 'Part 1'
   });
 
-  const [turnCount, setTurnCount] = useState(0);
-  const [history, setHistory] = useState<any[]>([]);
   const [aiResponse, setAiResponse] = useState('');
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [summary, setSummary] = useState('');
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
-  const { isListening, transcript, startListening, stopListening, speak, isSpeaking, cancelSpeech } = useSpeech();
-  const transcriptProcessed = useRef(false);
+  const {
+    connected,
+    isRecording,
+    isPlaying,
+    aiText,
+    turnCount,
+    error: geminiError,
+    connect: geminiConnect,
+    startRecording,
+    stopRecording,
+    sendText,
+    disconnect: geminiDisconnect,
+    stopAudio,
+    setOnTurnComplete,
+    setOnConnected,
+  } = useGeminiLive();
 
   // Pre-generate random values for waveform
   const waveformValues = React.useMemo(() => [...Array(20)].map((_, i) => ({
@@ -59,25 +72,8 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   })), []);
 
   const startSession = async () => {
-    // iOS Safari requires a user gesture to "unlock" speech synthesis.
-    // Prime it *before* any async work (network requests), otherwise audio can be silently blocked.
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      if (isIOS) {
-        try {
-          window.speechSynthesis.cancel();
-          const silent = new SpeechSynthesisUtterance('');
-          silent.volume = 0;
-          window.speechSynthesis.speak(silent);
-        } catch {
-          // best-effort
-        }
-      }
-    }
-
     setStep('active');
     setStatus('processing');
-    setTurnCount(1);
 
     // Determine category based on mode
     let category = '';
@@ -97,108 +93,109 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       language: options.language,
     });
 
-    let initialPrompt = '';
-    if (mode === 'Interview') {
-      initialPrompt = `Start session: [Mode: Interview], [Job: ${options.jobTitle}], [Industry: ${options.industry}], [Language: ${options.language}]`;
-    } else if (mode === 'Consultant') {
-      initialPrompt = `Start session: [Mode: AI Consultant], [Area: ${options.consultingArea}], [Language: ${options.language}]`;
-    } else {
-      initialPrompt = `Start session: [Mode: IELTS], [Part: ${options.ieltsPart}], [Language: ${options.language}]`;
-    }
+    // Connect to Gemini Live
+    await geminiConnect({
+      language: options.language,
+      mode: mode || '',
+      area: options.consultingArea,
+      jobTitle: options.jobTitle,
+      industry: options.industry,
+      ieltsPart: options.ieltsPart,
+    });
+  };
 
-    try {
-      const response = await getGeminiResponse(initialPrompt, []);
-      setAiResponse(response || '');
-      setHistory([{ role: 'user', parts: [{ text: initialPrompt }] }, { role: 'model', parts: [{ text: response }] }]);
+  // Handle Gemini Live connection established
+  useEffect(() => {
+    setOnConnected(() => {
+      let initialPrompt = '';
+      if (mode === 'Interview') {
+        initialPrompt = `Start session: [Mode: Interview], [Job: ${options.jobTitle}], [Industry: ${options.industry}], [Language: ${options.language}]`;
+      } else if (mode === 'Consultant') {
+        initialPrompt = `Start session: [Mode: AI Consultant], [Area: ${options.consultingArea}], [Language: ${options.language}]`;
+      } else {
+        initialPrompt = `Start session: [Mode: IELTS], [Part: ${options.ieltsPart}], [Language: ${options.language}]`;
+      }
+      sendText(initialPrompt);
+      setStatus('processing');
+    });
+  }, [setOnConnected, sendText, mode, options]);
+
+  // Handle turn completion
+  useEffect(() => {
+    setOnTurnComplete((currentTurn: number, text: string) => {
+      console.log('[Simulator] Turn complete:', currentTurn, text.substring(0, 80));
+
+      if (text.includes('[FINISH]')) {
+        const finishMatch = text.match(/\[FINISH\]\s*([\s\S]+)$/);
+        const summaryPart = finishMatch ? finishMatch[1].trim() : null;
+        setSummary(summaryPart || 'Session completed.');
+        setStep('finished');
+      } else if (currentTurn >= 5) {
+        setSummary('Maximum turns reached. Session completed.');
+        setStep('finished');
+      } else {
+        setStatus('idle');
+      }
+    });
+  }, [setOnTurnComplete]);
+
+  // Update AI response text from live transcription
+  useEffect(() => {
+    if (aiText) {
+      setAiResponse(aiText);
+    }
+  }, [aiText]);
+
+  // Sync status based on Gemini Live state
+  useEffect(() => {
+    if (isPlaying && statusRef.current !== 'speaking') {
       setStatus('speaking');
-      speak(response || '', options.language, () => setStatus('idle'));
-    } catch (error) {
-      console.error(error);
+    } else if (!isPlaying && statusRef.current === 'speaking') {
       setStatus('idle');
     }
-  };
+  }, [isPlaying]);
+
+  // Auto-start recording when idle (AI done speaking)
+  useEffect(() => {
+    if (status === 'idle' && step === 'active' && connected && !isRecording && !isPlaying) {
+      const timer = setTimeout(() => {
+        startRecording();
+        setStatus('listening');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [status, step, connected, isRecording, isPlaying, startRecording]);
+
+  // Stop recording when AI starts playing audio
+  useEffect(() => {
+    if (isPlaying && isRecording) {
+      stopRecording();
+    }
+  }, [isPlaying, isRecording, stopRecording]);
+
+  // Handle Gemini errors
+  useEffect(() => {
+    if (geminiError) {
+      console.error('[Simulator] Gemini error:', geminiError);
+    }
+  }, [geminiError]);
 
   const handlePushToTalk = () => {
-    if (status === 'idle') {
-      transcriptProcessed.current = false;
-      setStatus('listening');
-      startListening(options.language);
-    } else if (status === 'listening') {
-      stopListening();
-      setStatus('idle'); // Immediately update status when stopping
+    if (status === 'idle' || status === 'listening') {
+      if (isRecording) {
+        stopRecording();
+        setStatus('idle');
+      } else {
+        stopAudio(); // Interrupt AI if speaking
+        startRecording();
+        setStatus('listening');
+      }
     }
   };
 
-  const processUserMessage = useCallback(async (text: string) => {
-    setStatus('processing');
-    const newHistory = [...history, { role: 'user', parts: [{ text }] }];
-
-    try {
-      const response = await getGeminiResponse(text, history);
-      setAiResponse(response || '');
-      setHistory([...newHistory, { role: 'model', parts: [{ text: response }] }]);
-
-      const newTurnCount = turnCount + 1;
-      setTurnCount(newTurnCount);
-
-      setStatus('speaking');
-      speak(response || '', options.language, () => {
-        if (response?.includes('[FINISH]')) {
-          // Use regex to handle any whitespace around [FINISH] and ensure clean extraction
-          const finishMatch = response.match(/\[FINISH\]\s*([\s\S]+)$/);
-          const summaryPart = finishMatch ? finishMatch[1].trim() : null;
-          setSummary(summaryPart || 'Session completed.');
-          setStep('finished');
-        } else if (newTurnCount >= 5) {
-          setSummary('Maximum turns reached. Session completed.');
-          setStep('finished');
-        } else {
-          setStatus('idle');
-        }
-      });
-    } catch (error) {
-      console.error(error);
-      setStatus('idle');
-    }
-  }, [history, turnCount, speak, options.language]);
-
-  // Handle transcript completion
-  useEffect(() => {
-    if (!isListening && transcript && !transcriptProcessed.current && status === 'listening') {
-      transcriptProcessed.current = true;
-      // Defer to avoid synchronous setState in effect
-      setTimeout(() => {
-        processUserMessage(transcript);
-      }, 0);
-    }
-  }, [isListening, transcript, status, processUserMessage]);
-
-  // Auto-start listening when AI stops speaking
-  useEffect(() => {
-    if (!isSpeaking && status === 'idle' && step === 'active') {
-      // AI stopped speaking, auto-start listening.
-      // Defer state updates to avoid setState synchronously inside effects (iOS Safari is also touchy here).
-      transcriptProcessed.current = false;
-      setTimeout(() => {
-        setStatus('listening');
-        startListening(options.language);
-      }, 0);
-    }
-  }, [isSpeaking, status, step, startListening, options.language]);
-
-  // Stop listening when AI starts speaking
-  useEffect(() => {
-    if (isSpeaking && isListening) {
-      stopListening();
-      setTimeout(() => setStatus('idle'), 0);
-    }
-  }, [isSpeaking, isListening, stopListening]);
-
   const resetSession = () => {
-    cancelSpeech();
+    geminiDisconnect();
     setStep('setup');
-    setTurnCount(0);
-    setHistory([]);
     setAiResponse('');
     setStatus('idle');
     setSummary('');
@@ -209,13 +206,13 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     if (step === 'active') {
       setShowExitConfirm(true);
     } else {
-      cancelSpeech();
+      geminiDisconnect();
       onBack();
     }
   };
 
   const confirmExit = () => {
-    cancelSpeech();
+    geminiDisconnect();
     setShowExitConfirm(false);
     onBack();
   };
@@ -475,7 +472,7 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                     className="relative z-10 object-cover scale-125"
                   />
                 </motion.div>
-                {status === 'speaking' && (
+                {(status === 'speaking' || isPlaying) && (
                   <motion.div
                     className="absolute -bottom-2 -right-2 bg-[#00A86B] p-3 rounded-full shadow-xl border-2 border-white z-20"
                     animate={{ scale: [1, 1.1, 1] }}
@@ -492,10 +489,10 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
                   <motion.div
                     key={i}
                     animate={{
-                      height: status === 'speaking' || status === 'listening'
+                      height: status === 'speaking' || status === 'listening' || isPlaying || isRecording
                         ? [20, val.height, 20]
                         : 10,
-                      opacity: status === 'idle' ? 0.4 : 1
+                      opacity: status === 'idle' && !isPlaying && !isRecording ? 0.4 : 1
                     }}
                     transition={{
                       repeat: Infinity,
@@ -560,26 +557,26 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
 
                 <motion.button
                   onClick={handlePushToTalk}
-                  disabled={isSpeaking || status === 'processing'}
-                  whileHover={{ scale: status === 'listening' ? 1 : 1.05 }}
-                  whileTap={{ scale: status === 'listening' ? 1 : 0.95 }}
+                  disabled={isPlaying || status === 'processing'}
+                  whileHover={{ scale: isRecording ? 1 : 1.05 }}
+                  whileTap={{ scale: isRecording ? 1 : 0.95 }}
                   className={`
                     relative w-28 h-28 rounded-full flex items-center justify-center
-                    ${status === 'listening'
+                    ${isRecording
                       ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-xl shadow-red-500/30'
                       : 'bg-gradient-to-br from-[#0078D7] to-[#00A86B] shadow-xl shadow-[#0078D7]/30'}
-                    ${(isSpeaking || status === 'processing') ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${(isPlaying || status === 'processing') ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
                   {/* Pulsing ring */}
-                  {status !== 'listening' && !isSpeaking && status !== 'processing' && (
+                  {!isRecording && !isPlaying && status !== 'processing' && (
                     <motion.div
                       className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0078D7] to-[#00A86B]"
                       animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     />
                   )}
-                  {status === 'listening' ? (
+                  {isRecording ? (
                     <Square size={36} className="text-white" />
                   ) : (
                     <Mic size={36} className="text-white" />
