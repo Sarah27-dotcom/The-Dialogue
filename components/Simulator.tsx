@@ -13,7 +13,6 @@ import {
   TrendingUp,
   GraduationCap,
   CheckCircle2,
-  AlertCircle,
   X,
   FileText,
   Home,
@@ -32,7 +31,6 @@ interface SimulatorProps {
 
 export default function Simulator({ mode, onBack }: SimulatorProps) {
   const [step, setStep] = useState<'setup' | 'active' | 'finished'>('setup');
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [options, setOptions] = useState({
     jobTitle: 'Marketing Manager',
     industry: 'Technology',
@@ -216,10 +214,6 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     setTimeout(() => {
       onBack();
     }, 100);
-  };
-
-  const cancelExit = () => {
-    setShowExitConfirm(false);
   };
 
   return (
@@ -777,55 +771,6 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
       <footer className="p-4 text-center text-xs font-semibold text-[#1A1A1A]/50 uppercase tracking-wide">
         Work Reimagined in The Age of AI
       </footer>
-
-      {/* Exit Confirmation Modal */}
-      <AnimatePresence>
-        {showExitConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-[#1A1A1A]/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-            onClick={cancelExit}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-[#E0E0E0]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertCircle size={24} className="text-red-500" />
-                </div>
-                <h3 className="text-xl font-bold text-[#1A1A1A]">Exit Session?</h3>
-              </div>
-
-              <p className="text-[#1A1A1A]/70 mb-6 leading-relaxed">
-                Are you sure you want to stop this session? Your progress will be lost.
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={cancelExit}
-                  className="flex-1 border-2 border-[#E0E0E0] text-[#1A1A1A]/70 py-3 rounded-xl font-bold hover:bg-[#F8F9FA] transition-all"
-                >
-                  Keep Going
-                </button>
-                <button
-                  onClick={confirmExit}
-                  className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-all"
-                >
-                  Yes, Exit
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
