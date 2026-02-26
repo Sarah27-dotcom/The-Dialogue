@@ -109,14 +109,17 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
     setOnConnected(() => {
       let initialPrompt = '';
       if (mode === 'Interview') {
-        initialPrompt = `Start session: [Mode: Interview], [Job: ${options.jobTitle}], [Industry: ${options.industry}], [Language: ${options.language}]`;
+        initialPrompt = `Hello, I'm here for an interview for a ${options.jobTitle} position at a ${options.industry} company.`;
       } else if (mode === 'Consultant') {
-        initialPrompt = `Start session: [Mode: AI Consultant], [Area: ${options.consultingArea}], [Language: ${options.language}]`;
+        initialPrompt = `Hello, I need help with a business problem related to ${options.consultingArea}.`;
       } else {
-        initialPrompt = `Start session: [Mode: IELTS], [Part: ${options.ieltsPart}], [Language: ${options.language}]`;
+        initialPrompt = `Hello, I'm ready to practice IELTS ${options.ieltsPart}.`;
       }
-      sendText(initialPrompt);
-      setStatus('processing');
+      // Small delay to ensure session is fully ready
+      setTimeout(() => {
+        sendText(initialPrompt);
+        setStatus('processing');
+      }, 300);
     });
   }, [setOnConnected, sendText, mode, options]);
 
@@ -142,7 +145,12 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   // Update AI response text from live transcription
   useEffect(() => {
     if (aiText) {
-      setAiResponse(aiText);
+      // Only remove [WAVE:ON] tag, keep everything else the AI says
+      const filteredText = aiText
+        .replace(/\[WAVE:ON\]/g, '') // Remove WAVE:ON tag for display
+        .trim();
+
+      setAiResponse(filteredText);
     }
   }, [aiText]);
 
@@ -202,19 +210,12 @@ export default function Simulator({ mode, onBack }: SimulatorProps) {
   };
 
   const handleBack = () => {
-    // Only show confirmation if session is active
-    if (step === 'active') {
-      setShowExitConfirm(true);
-    } else {
-      geminiDisconnect();
-      onBack();
-    }
-  };
-
-  const confirmExit = () => {
+    // Stop everything immediately and go back - no confirmation needed
     geminiDisconnect();
-    setShowExitConfirm(false);
-    onBack();
+    // Small delay to ensure cleanup completes
+    setTimeout(() => {
+      onBack();
+    }, 100);
   };
 
   const cancelExit = () => {

@@ -28,6 +28,7 @@ CONSTRAINTS:
 - TURN LIMIT: Exactly 5 turns per session.
 - VOICE OPTIMIZATION: Your first response in Turn 5 MUST be under 40 words (for speaking).
 - NO FORMATTING: Do NOT use bold (**), italics, bullet points, or emojis.
+- NO INTERNAL MONOLOGUE: NEVER output your thinking, planning, or internal state. ONLY speak directly to the user.
 - TAGGING SYSTEM:
   - ALWAYS start every response with the tag [WAVE:ON].
   - On the 5th response, provide a brief summary, then add [FINISH] followed by your detailed solution.
@@ -149,7 +150,8 @@ export function useGeminiLive() {
   const connect = useCallback(async (config: GeminiLiveConfig) => {
     setError(null);
 
-    // Close existing session if any
+    // Stop any existing audio and close session
+    stopAudioPlayback();
     if (sessionRef.current) {
       try { sessionRef.current.close(); } catch { /* ignore */ }
       sessionRef.current = null;
@@ -180,7 +182,9 @@ export function useGeminiLive() {
       }
 
       if (config.language === 'Indonesian') {
-        systemInstruction += `\n\nRespond in Indonesian (Bahasa Indonesia).`;
+        systemInstruction += `\n\nIMPORTANT: You must respond ONLY in Indonesian (Bahasa Indonesia). Do NOT mix with English or any other language.`;
+      } else {
+        systemInstruction += `\n\nIMPORTANT: You must respond ONLY in English. Do NOT mix with any other language.`;
       }
 
       // Reset state
@@ -188,27 +192,48 @@ export function useGeminiLive() {
       turnCountRef.current = 0;
       audioQueueRef.current = [];
 
-      const session = await ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: 'Zephyr',
-              },
+      // Build config with optional voice setting
+      const sessionConfig: any = {
+        responseModalities: [Modality.AUDIO],
+        systemInstruction,
+        outputAudioTranscription: {},
+      };
+
+      // Indonesian → Female voice (Charon), English → Male voice (Kore - better support)
+      if (config.language === 'Indonesian') {
+        sessionConfig.speechConfig = {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: 'Charon',
             },
           },
-          systemInstruction,
-          outputAudioTranscription: {},
-        },
+        };
+        console.log('[GeminiLive] Using voice: Charon (female) for language: Indonesian');
+      } else {
+        sessionConfig.speechConfig = {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: 'Kore',
+            },
+          },
+        };
+        console.log('[GeminiLive] Using voice: Kore (male) for language: English');
+      }
+
+      const session = await ai.live.connect({
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+        config: sessionConfig,
         callbacks: {
           onopen: () => {
-            console.log('[GeminiLive] Session opened');
+            console.log('[GeminiLive] Session opened successfully');
             setConnected(true);
-            onConnectedRef.current?.();
+            // Wait a bit before calling onConnected to ensure session is stable
+            setTimeout(() => {
+              onConnectedRef.current?.();
+            }, 500);
           },
           onmessage: (message: LiveServerMessage) => {
+            console.log('[GeminiLive] Message received:', JSON.stringify(message).substring(0, 200));
             // Handle audio data
             if (message.serverContent?.modelTurn?.parts) {
               for (const part of message.serverContent.modelTurn.parts) {
@@ -218,19 +243,17 @@ export function useGeminiLive() {
                     part.inlineData.mimeType || 'audio/pcm;rate=24000'
                   );
                 }
-                if (part.text) {
-                  console.log('[GeminiLive] Text:', part.text);
-                  turnTextRef.current += part.text;
-                  setAiText(turnTextRef.current);
-                }
+                // NOTE: Don't use part.text for display - it may contain internal thinking
+                // Only use outputTranscription for what the user sees
               }
             }
 
-            // Handle output audio transcription
+            // Handle output audio transcription (this is what the AI actually speaks)
             if (message.serverContent?.outputTranscription?.text) {
               const text = message.serverContent.outputTranscription.text;
               turnTextRef.current += text;
               setAiText(turnTextRef.current);
+              console.log('[GeminiLive] Transcription:', text.substring(0, 80));
             }
 
             // Handle turn complete
@@ -279,10 +302,23 @@ export function useGeminiLive() {
   const sendText = useCallback((text: string) => {
     if (sessionRef.current) {
       console.log('[GeminiLive] Sending text:', text.substring(0, 80));
-      sessionRef.current.sendClientContent({
-        turns: text,
-        turnComplete: true,
-      });
+      try {
+        sessionRef.current.sendClientContent({
+          turns: [
+            {
+              role: 'user',
+              parts: [{ text }]
+            }
+          ]
+        });
+        console.log('[GeminiLive] Text sent successfully');
+      } catch (err) {
+        console.error('[GeminiLive] Error sending text:', err);
+        setError('Failed to send message to Gemini');
+      }
+    } else {
+      console.error('[GeminiLive] Cannot send text: no active session');
+      setError('No active Gemini session');
     }
   }, []);
 
@@ -381,13 +417,16 @@ export function useGeminiLive() {
 
   /** Stop audio playback */
   const stopAudioPlayback = useCallback(() => {
+    // Stop current source
     if (currentSourceRef.current) {
       try { currentSourceRef.current.stop(); } catch { /* already stopped */ }
       currentSourceRef.current = null;
     }
+    // Clear audio queue
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     setIsPlaying(false);
+    console.log('[GeminiLive] Audio playback stopped, queue cleared');
   }, []);
 
   /** Disconnect and cleanup */
