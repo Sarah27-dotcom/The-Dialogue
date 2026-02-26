@@ -85,6 +85,17 @@ export function useSpeech() {
     }
   }, []);
 
+  // Helper function to identify voice gender from name patterns
+  const getVoiceGender = (voiceName: string): 'male' | 'female' | 'unknown' => {
+    const name = voiceName.toLowerCase();
+    const maleKeywords = ['male', 'david', 'john', 'mark', 'daniel', 'guy', 'adam', 'james', 'google indonesia'];
+    const femaleKeywords = ['female', 'zira', 'susan', 'karen', 'linda', 'google us english', 'samantha'];
+
+    if (maleKeywords.some(k => name.includes(k))) return 'male';
+    if (femaleKeywords.some(k => name.includes(k))) return 'female';
+    return 'unknown';
+  };
+
   const startListening = useCallback((language: string = 'English') => {
     if (recognitionRef.current) {
       // Clear any existing silence timeout
@@ -159,11 +170,23 @@ export function useSpeech() {
         utterance.voice = selectedVoiceRef.current.get(langCode) || null;
         utterance.lang = langCode;
       } else {
-        // Find and cache voice for this language
-        const preferredVoice = voicesCacheRef.current.find(v => v.lang.includes(langCode));
-        if (preferredVoice) {
-          selectedVoiceRef.current.set(langCode, preferredVoice);
-          utterance.voice = preferredVoice;
+        // Find and cache voice for this language with gender preference
+        // Indonesian → Male, English → Female
+        const preferredGender = langCode === 'id-ID' ? 'male' : 'female';
+
+        let selectedVoice = voicesCacheRef.current.find(v => {
+          if (!v.lang.includes(langCode)) return false;
+          return getVoiceGender(v.name) === preferredGender;
+        });
+
+        // Fallback: if no gender-specific voice found, use first available
+        if (!selectedVoice) {
+          selectedVoice = voicesCacheRef.current.find(v => v.lang.includes(langCode));
+        }
+
+        if (selectedVoice) {
+          selectedVoiceRef.current.set(langCode, selectedVoice);
+          utterance.voice = selectedVoice;
           utterance.lang = langCode;
         }
       }
